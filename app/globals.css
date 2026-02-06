@@ -1,0 +1,392 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+/* Markdown Preview Styles */
+.markdown-preview {
+  @apply max-w-none text-neutral-800 dark:text-neutral-200;
+}
+
+.markdown-preview h1 {
+  @apply text-3xl font-bold mb-4 mt-6 pb-2 border-b border-neutral-200 dark:border-neutral-700;
+}
+
+.markdown-preview h2 {
+  @apply text-2xl font-semibold mb-3 mt-5 pb-1 border-b border-neutral-100 dark:border-neutral-800;
+}
+
+.markdown-preview h3 {
+  @apply text-xl font-semibold mb-2 mt-4;
+}
+
+.markdown-preview h4 {
+  @apply text-lg font-medium mb-2 mt-3;
+}
+
+.markdown-preview p {
+  @apply mb-4 leading-relaxed;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  @apply mb-4 pl-6;
+}
+
+.markdown-preview li {
+  @apply mb-1;
+}
+
+.markdown-preview ul {
+  @apply list-disc;
+}
+
+.markdown-preview ol {
+  @apply list-decimal;
+}
+
+.markdown-preview blockquote {
+  @apply border-l-4 border-neutral-300 dark:border-neutral-600 pl-4 py-1 my-4 italic text-neutral-600 dark:text-neutral-400;
+}
+
+.markdown-preview a {
+  @apply text-neutral-900 dark:text-neutral-100 underline hover:no-underline;
+}
+
+.markdown-preview code:not(pre code) {
+  @apply bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 text-sm font-mono text-pink-600 dark:text-pink-400;
+}
+
+.markdown-preview pre {
+  @apply bg-neutral-900 dark:bg-neutral-950 text-neutral-100 p-4 overflow-x-auto mb-4;
+}
+
+.markdown-preview pre code {
+  @apply bg-transparent p-0 text-sm;
+}
+
+.markdown-preview img {
+  @apply max-w-full h-auto my-4;
+}
+
+.markdown-preview hr {
+  @apply my-6 border-neutral-200 dark:border-neutral-700;
+}
+
+/* Table Styles - Critical for proper rendering */
+.markdown-preview table {
+  @apply w-full border-collapse mb-4 text-sm;
+}
+
+.markdown-preview thead {
+  @apply bg-neutral-100 dark:bg-neutral-800;
+}
+
+.markdown-preview th {
+  @apply px-4 py-2 text-left font-semibold border border-neutral-300 dark:border-neutral-600;
+}
+
+.markdown-preview td {
+  @apply px-4 py-2 border border-neutral-300 dark:border-neutral-600;
+}
+
+.markdown-preview tbody tr:nth-child(even) {
+  @apply bg-neutral-50 dark:bg-neutral-900;
+}
+
+.markdown-preview tbody tr:hover {
+  @apply bg-neutral-100 dark:bg-neutral-800;
+}
+
+/* Task list styles */
+.markdown-preview input[type="checkbox"] {
+  @apply mr-2;
+}
+
+/* Notion Callouts */
+.markdown-preview aside {
+  @apply my-4 p-4 bg-neutral-50 dark:bg-neutral-800 border-l-4 border-neutral-300 dark:border-neutral-600;
+}
+
+.markdown-preview aside > :first-child {
+  @apply text-2xl leading-none mb-2;
+}
+
+.markdown-preview aside p {
+  @apply mb-2;
+}
+
+.markdown-preview aside p:last-child {
+  @apply mb-0;
+}
+
+.markdown-preview aside strong {
+  @apply font-semibold text-neutral-900 dark:text-neutral-100;
+}
+
+/* HTML Preview Container */
+.html-preview-container {
+  @apply w-full h-full overflow-auto bg-white dark:bg-neutral-900;
+  contain: layout style paint;
+  isolation: isolate;
+}
+
+.html-preview-content {
+  @apply p-4;
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  color: inherit;
+}
+
+.html-preview-content * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.html-preview-content article,
+.html-preview-content div[class*="page"],
+.html-preview-content div[class*="body"] {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.html-preview-content figure,
+.html-preview-content table {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.html-preview-content h1 {
+  @apply text-3xl font-bold mt-6 mb-4 text-neutral-900 dark:text-neutral-100;
+}
+
+.html-preview-content h2 {
+  @apply text-2xl font-bold mt-5 mb-3 text-neutral-900 dark:text-neutral-100;
+}
+
+.html-preview-content h3 {
+  @apply text-xl font-semibold mt-4 mb-2 text-neutral-900 dark:text-neutral-100;
+}
+
+.html-preview-content p {
+  @apply my-3 text-neutral-800 dark:text-neutral-200 leading-relaxed;
+}
+
+.html-preview-content ul,
+.html-preview-content ol {
+  @apply my-3 ml-6 text-neutral-800 dark:text-neutral-200;
+}
+
+.html-preview-content li {
+  @apply my-1;
+}
+
+.html-preview-content a {
+  @apply text-neutral-900 dark:text-neutral-100 underline hover:no-underline;
+}
+
+.html-preview-content strong {
+  @apply font-semibold text-neutral-900 dark:text-neutral-100;
+}
+
+.html-preview-content em {
+  @apply italic;
+}
+
+.html-preview-content .callout,
+.html-preview-content figure.callout {
+  @apply my-4 p-4 border-l-4;
+  display: block !important;
+  width: 100% !important;
+  white-space: normal !important;
+}
+
+.html-preview-content .block-color-blue_background {
+  @apply bg-blue-50 dark:bg-blue-900/20 border-blue-500;
+}
+
+.html-preview-content .block-color-yellow_background {
+  @apply bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500;
+}
+
+.html-preview-content .block-color-red_background {
+  @apply bg-red-50 dark:bg-red-900/20 border-red-500;
+}
+
+.html-preview-content .block-color-green_background {
+  @apply bg-green-50 dark:bg-green-900/20 border-green-500;
+}
+
+.html-preview-content .block-color-gray_background {
+  @apply bg-neutral-50 dark:bg-neutral-800 border-neutral-500;
+}
+
+.html-preview-content table {
+  @apply w-full border-collapse my-4 text-sm;
+  table-layout: auto !important;
+}
+
+.html-preview-content th,
+.html-preview-content td {
+  @apply px-4 py-2 border border-neutral-300 dark:border-neutral-600;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: none !important;
+}
+
+.html-preview-content th {
+  @apply font-semibold bg-neutral-100 dark:bg-neutral-800;
+}
+
+.html-preview-content .simple-table-header {
+  @apply bg-neutral-100 dark:bg-neutral-800;
+}
+
+.html-preview-content pre {
+  @apply bg-neutral-900 dark:bg-neutral-950 text-neutral-100 p-4 overflow-x-auto my-4 text-sm;
+  white-space: pre-wrap !important;
+  word-wrap: break-word;
+  width: 100% !important;
+}
+
+.html-preview-content code {
+  @apply font-mono text-sm bg-neutral-100 dark:bg-neutral-800 px-1;
+  white-space: pre-wrap !important;
+}
+
+.html-preview-content pre code {
+  @apply bg-transparent p-0;
+  white-space: pre-wrap !important;
+}
+
+.html-preview-content img {
+  @apply max-w-full h-auto my-4;
+}
+
+.html-preview-content blockquote {
+  @apply border-l-4 border-neutral-300 dark:border-neutral-600 pl-4 my-4 italic text-neutral-700 dark:text-neutral-300;
+}
+
+.html-preview-content hr {
+  @apply my-6 border-neutral-300 dark:border-neutral-600;
+}
+
+/* Syntax Highlighting (highlight.js) */
+.hljs {
+  @apply bg-transparent;
+}
+
+.hljs-keyword,
+.hljs-selector-tag {
+  @apply text-purple-400;
+}
+
+.hljs-string,
+.hljs-attr {
+  @apply text-green-400;
+}
+
+.hljs-number,
+.hljs-literal {
+  @apply text-orange-400;
+}
+
+.hljs-comment {
+  @apply text-neutral-500;
+}
+
+.hljs-function,
+.hljs-title {
+  @apply text-blue-400;
+}
+
+.hljs-variable,
+.hljs-params {
+  @apply text-cyan-400;
+}
+
+/* Editor styles */
+.editor-textarea {
+  @apply w-full h-full resize-none bg-transparent border-none outline-none font-mono text-sm leading-relaxed p-4;
+}
+
+.editor-textarea:focus {
+  @apply ring-0;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-neutral-100 dark:bg-neutral-900;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-neutral-300 dark:bg-neutral-700;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-neutral-400 dark:bg-neutral-600;
+}
+
+/* Paper style for preview */
+.paper-preview {
+  @apply bg-white dark:bg-neutral-900;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .paper-preview {
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  }
+}
+
+/* Focus states without rounded corners */
+select:focus,
+input:focus,
+textarea:focus,
+button:focus {
+  outline: none;
+}
+
+/* Custom checkbox */
+input[type="checkbox"] {
+  @apply appearance-none w-4 h-4 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 checked:bg-neutral-900 dark:checked:bg-neutral-100 relative cursor-pointer;
+}
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  @apply absolute inset-0 flex items-center justify-center;
+  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+@media (prefers-color-scheme: dark) {
+  input[type="checkbox"]:checked::after {
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23171717' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+  }
+}
