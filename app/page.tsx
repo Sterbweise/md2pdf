@@ -192,7 +192,7 @@ export default function Home() {
           <div className="flex items-center justify-between">
             {/* Logo & Title */}
             <div className="flex items-center gap-4">
-              <a href="/" className="flex items-center gap-2">
+              <button onClick={() => window.location.reload()} className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center">
                   <svg
                     className="w-4 h-4 text-white dark:text-neutral-900"
@@ -211,7 +211,7 @@ export default function Home() {
                 <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                   MD to PDF
                 </span>
-              </a>
+              </button>
 
               {/* Document Name */}
               <div className="hidden sm:flex items-center gap-2 text-sm text-neutral-500">

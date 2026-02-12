@@ -83,18 +83,22 @@ export async function fetchNotionPage(
 
   // Configure custom transformers for better markdown output
   n2m.setCustomTransformer("callout", async (block) => {
-    if (block.type !== "callout") return false;
-    const callout = block.callout;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((block as any).type !== "callout") return false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const callout = (block as any).callout;
     const emoji =
       callout.icon?.type === "emoji" ? callout.icon.emoji + " " : "";
-    const text = callout.rich_text.map((t) => t.plain_text).join("");
+    const text = callout.rich_text.map((t: { plain_text: string }) => t.plain_text).join("");
     return `> ${emoji}${text}`;
   });
 
   n2m.setCustomTransformer("toggle", async (block) => {
-    if (block.type !== "toggle") return false;
-    const toggle = block.toggle;
-    const text = toggle.rich_text.map((t) => t.plain_text).join("");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((block as any).type !== "toggle") return false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toggle = (block as any).toggle;
+    const text = toggle.rich_text.map((t: { plain_text: string }) => t.plain_text).join("");
     return `<details>\n<summary>${text}</summary>\n\n</details>`;
   });
 

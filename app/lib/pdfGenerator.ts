@@ -62,7 +62,7 @@ function findChromePath(): string | undefined {
             console.log(`  ✓ Found browser at: ${chromePath}`);
             return chromePath;
           }
-        } catch (e) {
+        } catch {
           // Ignore errors
         }
       }
@@ -187,7 +187,7 @@ export async function generatePDF(
         page.evaluateHandle("document.fonts.ready"),
         new Promise((resolve) => setTimeout(resolve, 5000)), // Max 5 seconds for fonts
       ]);
-    } catch (e) {
+    } catch {
       console.log("Font loading skipped or timed out");
     }
 

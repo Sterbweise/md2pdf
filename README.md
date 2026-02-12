@@ -1,101 +1,129 @@
 # MD to PDF Converter
 
-A web application that converts Markdown files and Notion pages to beautifully formatted, print-ready PDFs with zero information loss.
+✨ Modern Markdown & HTML to PDF converter with smart page breaks, Notion export support, custom formatting options, and a clean minimalist interface. Free and open source.
 
 ## Features
 
-- **Dual Mode**: Choose between Markdown to PDF or HTML to PDF conversion
-- **Markdown Support**: Full GitHub Flavored Markdown (GFM) support including tables, code blocks, task lists, and more
-- **HTML Support**: Direct HTML to PDF conversion (perfect for Notion HTML exports)
-- **ZIP Support**: Upload ZIP files containing HTML + images (automatic image embedding as base64)
-- **Isolated Preview**: HTML styles are stripped in preview to prevent layout issues, but kept in PDF
-- **Notion Integration**: Import pages directly from Notion using the Notion API
-- **Table Rendering**: Tables dynamically adjust column widths and wrap text properly (never crop content)
-- **Syntax Highlighting**: Code blocks are beautifully highlighted
-- **Export Options**: Customize page size, margins, font size, and page numbers
-- **Live Preview**: See your formatted document in real-time as you type
+### Core Functionality
+- 📝 **Dual Mode**: Convert Markdown or HTML to PDF
+- 🎨 **Smart Page Breaks**: Intelligent layout to minimize white space
+- 📦 **Notion Support**: Direct API import + nested ZIP export handling
+- 🖼️ **Image Embedding**: Automatic base64 embedding for images in ZIP files
+- 👁️ **Live Preview**: Real-time rendering as you type
+
+### Advanced Customization
+- 🎯 **11+ Font Families**: Inter, Georgia, Times, Garamond, Palatino, Helvetica, Arial, Roboto, and more
+- 💻 **Code Fonts**: JetBrains Mono (default), Fira Code, Source Code Pro, Consolas, Monaco, Menlo
+- 📏 **Custom Options**: Font size, margins (4 sides), line height, footer text
+- 📄 **Page Options**: A4/Letter/Legal, page numbers, custom footers
+- 🌓 **Dark Mode**: Full dark mode support
+
+### Document Features
+- ✅ **GitHub Flavored Markdown**: Tables, task lists, code blocks, and more
+- 🎨 **Syntax Highlighting**: Beautiful code highlighting
+- 📊 **Smart Tables**: Tables can break across pages while repeating headers
+- 📝 **Editable Filename**: Click to rename your document
+- 💾 **File Import Modal**: Drag & drop for .md, .html, .txt, .zip files
 
 ## Tech Stack
 
 - **Next.js 15** with TypeScript
-- **Tailwind CSS** for styling
+- **Tailwind CSS** with Notion-inspired design
+- **Puppeteer** for PDF generation with Chromium
+- **JSZip** for nested ZIP extraction
 - **react-markdown** + **remark-gfm** for markdown parsing
-- **Puppeteer** for PDF generation
-- **JSZip** for handling ZIP archives with images
-- **@notionhq/client** + **notion-to-md** for Notion integration
+- **@notionhq/client** for Notion API integration
 
 ## Getting Started
 
-### Prerequisites
+### Local Development
 
-- Node.js 18.x or higher
-- npm or yarn
-
-### Installation
-
-1. Clone the repository:
+1. **Clone the repository:**
 
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/yourusername/md-to-pdf.git
    cd md-to-pdf
    ```
 
-2. Install dependencies:
+2. **Install dependencies:**
 
    ```bash
    npm install
    ```
 
-3. Run the development server:
+3. **Run the development server:**
 
    ```bash
    npm run dev
    ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+4. **Open [http://localhost:3000](http://localhost:3000)**
+
+### Docker Deployment
+
+See [DOCKER.md](./DOCKER.md) for complete Docker deployment guide.
+
+**Quick start:**
+
+```bash
+# Using Docker Compose
+docker-compose up -d
+
+# Or manual Docker
+docker build -t md-to-pdf .
+docker run -d -p 3000:3000 --name md-to-pdf md-to-pdf
+```
+
+The app will be available at `http://localhost:3000`
 
 ## Usage
 
-### Mode 1: Markdown to PDF
+### Markdown to PDF
 
-1. Click the **"Markdown to PDF"** tab
-2. Paste or type your markdown content in the editor
-3. Or upload a `.md` file using the drag-and-drop uploader
-4. Preview your formatted document on the right
-5. Click "Export PDF" to download
+1. Write or paste your Markdown content
+2. See live preview on the right
+3. Click "Options" to customize formatting
+4. Click "Export PDF" to download
 
-### Mode 2: HTML to PDF
+### HTML to PDF
 
-1. Click the **"HTML to PDF"** tab
-2. Paste your HTML content in the editor
-3. Or upload a `.html` file (great for Notion HTML exports!)
-4. Or upload a `.zip` file containing HTML + images
-5. Preview your rendered HTML on the right
-6. Click "Export PDF" to download
+1. Switch to "HTML" mode
+2. Paste HTML or upload `.html` file
+3. Preview renders your HTML
+4. Export to PDF with custom options
 
-**Notion Users**:
+### Notion Exports
 
-- Export your page as HTML (File > Export > HTML)
-- If your page contains images, Notion will create a ZIP file with the HTML and image folder
-- Simply upload the ZIP file - images will be automatically embedded!
-- The preview isolates styles to prevent layout issues
+**Option 1: Direct Import (API)**
+1. Click "Notion" button
+2. Enter page URL and API key
+3. Import converts to Markdown automatically
 
-### Importing from Notion
+**Option 2: ZIP Upload**
+1. Export from Notion as HTML (includes ZIP)
+2. Click "Import" button
+3. Upload the ZIP file
+4. Handles nested `ExportBlock*.zip` files automatically
+5. All images are embedded for PDF export
 
-1. Click "Import Notion" in the header
-2. Enter your Notion page URL
-3. Enter your Notion API key (create one at [notion.so/my-integrations](https://www.notion.so/my-integrations))
-4. Make sure you've shared the page with your integration
-5. Click "Import Page"
+## Export Options
 
-### Export Options
+Access via the "Options" button:
 
-Click "Options" to customize:
+### Standard Options
+- **Page Size**: A4, Letter, Legal
+- **Margins**: Narrow (0.5"), Normal (0.75"), Wide (1")
+- **Font Size**: Small (10pt), Medium (12pt), Large (14pt)
+- **Body Font**: 11 choices (Inter default)
+- **Code Font**: 6 monospace fonts (JetBrains Mono default)
+- **Line Height**: Compact (1.4), Normal (1.6), Relaxed (1.8)
+- **Page Numbers**: Toggle on/off
 
-- **Page Size**: A4, Letter, or Legal
-- **Margins**: Narrow, Normal, or Wide
-- **Font Size**: Small, Medium, or Large
-- **Page Numbers**: Show or hide
+### Custom Options
+- **Custom Font Size**: 6-24pt (any value)
+- **Custom Margins**: Set each side independently (0-3 inches)
+- **Custom Line Height**: 1.0-3.0 multiplier
+- **Custom Footer**: Add text to bottom of each page
 
 ## Project Structure
 
@@ -103,43 +131,115 @@ Click "Options" to customize:
 md-to-pdf/
 ├── app/
 │   ├── api/
-│   │   ├── convert-pdf/route.ts    # PDF generation endpoint
-│   │   └── notion-import/route.ts  # Notion page fetching
+│   │   ├── convert-pdf/route.ts       # PDF generation endpoint
+│   │   ├── notion-import/route.ts     # Notion API integration
+│   │   └── health/route.ts            # Health check for Docker
 │   ├── components/
-│   │   ├── MarkdownEditor.tsx      # Markdown editor
-│   │   ├── PreviewPane.tsx         # Live preview
-│   │   ├── FileUploader.tsx        # Drag & drop upload
-│   │   ├── NotionImporter.tsx      # Notion import modal
-│   │   └── ExportOptions.tsx       # PDF options modal
+│   │   ├── MarkdownEditor.tsx         # Code editor
+│   │   ├── PreviewPane.tsx            # Live preview
+│   │   ├── FileImportModal.tsx        # File upload modal
+│   │   ├── ExportOptions.tsx          # PDF customization
+│   │   ├── NotionImporter.tsx         # Notion import modal
+│   │   └── ThankYouModal.tsx          # Post-download modal
 │   ├── lib/
-│   │   ├── markdownParser.ts       # Markdown to HTML
-│   │   ├── pdfGenerator.ts         # Puppeteer PDF logic
-│   │   ├── pdfStyles.ts            # Print-optimized CSS
-│   │   └── notionConverter.ts      # Notion to markdown
-│   ├── layout.tsx
-│   ├── page.tsx
-│   └── globals.css
-├── package.json
-└── README.md
+│   │   ├── pdfGenerator.ts            # Puppeteer PDF logic
+│   │   ├── pdfStyles.ts               # Smart page break CSS
+│   │   ├── markdownParser.ts          # MD to HTML conversion
+│   │   ├── htmlImageEmbedder.ts       # Image embedding
+│   │   └── notionConverter.ts         # Notion to MD
+│   ├── page.tsx                       # Main app page
+│   └── globals.css                    # Global styles
+├── Dockerfile                         # Production Docker build
+├── docker-compose.yml                 # Docker Compose config
+├── .dockerignore                      # Docker ignore rules
+├── .gitignore                         # Git ignore rules
+├── next.config.ts                     # Next.js config
+├── tailwind.config.ts                 # Tailwind config
+└── package.json
 ```
 
-## Development
+## Configuration
+
+Update these values in `app/page.tsx`:
+
+```typescript
+const CONFIG = {
+  githubRepo: "https://github.com/yourusername/md-to-pdf",
+  donationUrl: "https://github.com/sponsors/yourusername",
+  linkedIn: "https://www.linkedin.com/in/yourprofile/",
+  website: "https://yourwebsite.com/",
+};
+```
+
+## Scripts
 
 ```bash
-# Run development server
-npm run dev
+# Development
+npm run dev          # Start dev server
 
-# Build for production
-npm run build
+# Production
+npm run build        # Build for production
+npm start            # Start production server
 
-# Start production server
-npm start
+# Code Quality
+npm run lint         # Run ESLint
 
-# Lint code
-npm run lint
+# Docker
+docker-compose up -d # Start with Docker
 ```
+
+## Browser Support
+
+- Chrome/Edge (recommended)
+- Firefox
+- Safari
+- Any modern browser with JavaScript enabled
+
+## Known Limitations
+
+- PDF generation requires Chromium/Chrome (included in Docker)
+- Maximum file size: 1MB (configurable)
+- PDF generation timeout: 60 seconds (configurable)
+- Notion API requires integration token
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Deployment
+
+### Vercel (Recommended)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
+
+### Docker
+See [DOCKER.md](./DOCKER.md) for complete guide.
+
+### Other Platforms
+- **Railway**: `railway up`
+- **DigitalOcean**: App Platform auto-detects Next.js
+- **AWS/GCP/Azure**: Use Docker image or deploy as Node.js app
 
 ## License
 
-MIT
-# md2pdf
+MIT License - see [LICENSE](LICENSE) file for details
+
+## Author
+
+Made by [kchndz.dev](https://kchndz.dev/)
+
+## Support
+
+- ⭐ Star this repository
+- 💖 [Sponsor on GitHub](https://github.com/sponsors/yourusername)
+- 🐛 [Report issues](https://github.com/yourusername/md-to-pdf/issues)
+- 💼 [Connect on LinkedIn](https://www.linkedin.com/in/kchndz/)
+
+---
+
+**Free to use. Open source. Made with ❤️**

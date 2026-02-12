@@ -156,12 +156,12 @@ const components: Components = {
     </a>
   ),
   img: ({ src, alt, ...props }) => {
-    if (!src || src.trim() === "") {
+    if (!src || (typeof src === "string" && src.trim() === "")) {
       return null;
     }
     return (
       <img
-        src={src}
+        src={typeof src === "string" ? src : ""}
         alt={alt || ""}
         className="max-w-full h-auto my-4"
         {...props}

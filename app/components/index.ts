@@ -1,5 +1,6 @@
 export { default as MarkdownEditor } from "./MarkdownEditor";
 export { default as PreviewPane } from "./PreviewPane";
-export { default as FileUploader } from "./FileUploader";
+export { default as FileImportModal } from "./FileImportModal";
+export { default as ThankYouModal } from "./ThankYouModal";
 export { default as ExportOptions } from "./ExportOptions";
 export { default as NotionImporter } from "./NotionImporter";
