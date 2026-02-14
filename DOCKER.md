@@ -22,7 +22,7 @@ docker-compose logs -f
 docker-compose down
 ```
 
-The application will be available at `http://localhost:3000`
+The application will be available at `http://localhost:3501`
 
 ## Manual Docker Build
 
@@ -35,7 +35,7 @@ docker build -t md-to-pdf .
 # Run the container
 docker run -d \
   --name md-to-pdf \
-  -p 3000:3000 \
+  -p 3501:3501 \
   --restart unless-stopped \
   md-to-pdf
 
@@ -57,8 +57,8 @@ Create a `.env.production` file if you need to configure environment variables:
 # Optional: Notion API configuration
 # NOTION_API_KEY=your_api_key_here
 
-# Optional: Customize port (default: 3000)
-# PORT=3000
+# Optional: Customize port (default: 3501)
+# PORT=3501
 ```
 
 Then update `docker-compose.yml` to use it:
@@ -73,15 +73,15 @@ env_file:
 To run on a different host port, change the port mapping:
 
 ```bash
-# Run on port 8080 instead of 3000
-docker run -d -p 8080:3000 --name md-to-pdf md-to-pdf
+# Run on port 8080 instead of 3501
+docker run -d -p 8080:3501 --name md-to-pdf md-to-pdf
 ```
 
 Or in `docker-compose.yml`:
 
 ```yaml
 ports:
-  - "8080:3000"
+  - "8080:3501"
 ```
 
 ## Docker Image Details
@@ -120,26 +120,26 @@ docker push yourusername/md-to-pdf:latest
 
 ```bash
 docker pull yourusername/md-to-pdf:latest
-docker run -d -p 3000:3000 --name md-to-pdf yourusername/md-to-pdf:latest
+docker run -d -p 3501:3501 --name md-to-pdf yourusername/md-to-pdf:latest
 ```
 
 ### Using Docker Compose in Production
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   md-to-pdf:
     image: yourusername/md-to-pdf:latest
     restart: always
     ports:
-      - "3000:3000"
+      - "3501:3501"
     environment:
       - NODE_ENV=production
     deploy:
       resources:
         limits:
-          cpus: '1'
+          cpus: "1"
           memory: 1G
 ```
 
@@ -153,7 +153,7 @@ server {
     server_name your-domain.com;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3501;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -162,7 +162,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # Increase timeout for PDF generation
         proxy_read_timeout 120s;
         proxy_connect_timeout 120s;
@@ -175,7 +175,7 @@ server {
 
 ```
 your-domain.com {
-    reverse_proxy localhost:3000 {
+    reverse_proxy localhost:3501 {
         # Increase timeout for PDF generation
         timeout 120s
     }
@@ -187,6 +187,7 @@ your-domain.com {
 ### Container won't start
 
 Check logs:
+
 ```bash
 docker logs md-to-pdf
 ```
@@ -194,6 +195,7 @@ docker logs md-to-pdf
 ### Chromium issues
 
 If Puppeteer can't find Chromium:
+
 ```bash
 # Enter the container
 docker exec -it md-to-pdf sh
@@ -206,6 +208,7 @@ chromium-browser --version
 ### Memory issues
 
 Increase memory limits in `docker-compose.yml`:
+
 ```yaml
 deploy:
   resources:
@@ -216,6 +219,7 @@ deploy:
 ### Permission issues
 
 Make sure the container has proper write permissions:
+
 ```bash
 docker exec -it md-to-pdf sh
 ls -la /app
@@ -227,7 +231,7 @@ The application includes a health check endpoint at `/api/health`:
 
 ```bash
 # Check if the service is healthy
-curl http://localhost:3000/api/health
+curl http://localhost:3501/api/health
 # Response: {"status":"ok","timestamp":"2026-02-06T..."}
 ```
 
@@ -245,7 +249,7 @@ docker-compose up -d --build
 docker stop md-to-pdf
 docker rm md-to-pdf
 docker build -t md-to-pdf .
-docker run -d -p 3000:3000 --name md-to-pdf md-to-pdf
+docker run -d -p 3501:3501 --name md-to-pdf md-to-pdf
 ```
 
 ## Performance Tips
@@ -266,22 +270,26 @@ docker run -d -p 3000:3000 --name md-to-pdf md-to-pdf
 ## Cloud Deployment Platforms
 
 ### Vercel (Easiest)
+
 ```bash
 npm install -g vercel
 vercel --prod
 ```
 
 ### Railway
+
 ```bash
 railway up
 ```
 
 ### DigitalOcean App Platform
+
 - Connect your GitHub repo
 - Auto-detects Next.js
 - Set environment variables in dashboard
 
 ### AWS ECS / Google Cloud Run / Azure Container Instances
+
 Use the Docker image with your cloud provider's container service.
 
 ## Support

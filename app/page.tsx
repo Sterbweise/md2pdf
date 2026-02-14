@@ -56,9 +56,9 @@ const defaultOptions: PDFOptions = {
 
 // Configuration - Update these with your actual URLs
 const CONFIG = {
-  githubRepo: "https://github.com/kmusic/md-to-pdf",
-  donationUrl: "https://github.com/sponsors/kmusic",
-  linkedIn: "https://www.linkedin.com/in/kchndz/",
+  githubRepo: "https://github.com/Sterbweise/md2pdf",
+  donationUrl: "https://github.com/sponsors/Sterbweise",
+  linkedIn: "https://www.linkedin.com/in/killian-chandeze/",
   website: "https://kchndz.dev/",
 };
 
@@ -192,7 +192,10 @@ export default function Home() {
           <div className="flex items-center justify-between">
             {/* Logo & Title */}
             <div className="flex items-center gap-4">
-              <button onClick={() => window.location.reload()} className="flex items-center gap-2">
+              <button
+                onClick={() => window.location.reload()}
+                className="flex items-center gap-2"
+              >
                 <div className="w-8 h-8 bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center">
                   <svg
                     className="w-4 h-4 text-white dark:text-neutral-900"
