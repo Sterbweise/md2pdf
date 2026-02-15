@@ -317,6 +317,8 @@ table:has(td:nth-child(3)) td:nth-child(2) {
 th {
   background-color: #f3f4f6;
   font-weight: 600;
+  /* Keep headers on one line when possible (avoid "Frequenc" / "y" split) */
+  white-space: nowrap;
 }
 
 td {
@@ -351,10 +353,11 @@ pre {
   color: #e5e7eb;
   padding: 8pt;
   border-radius: 4pt;
-  overflow-x: hidden;
   margin: 8pt 0;
   white-space: pre-wrap;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
   /* Allow long code blocks to break across pages */
   page-break-inside: auto;
   break-inside: auto;
@@ -366,6 +369,9 @@ pre code {
   color: inherit;
   font-size: inherit;
   border-radius: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 /* ===========================================

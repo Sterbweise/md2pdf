@@ -92,6 +92,57 @@ function normalizeHtmlForPdf(html: string): string {
   return result;
 }
 
+/**
+ * Fetch a remote image URL and return as base64 data URI.
+ * Used to embed Notion/remote images in HTML before PDF generation.
+ */
+async function fetchImageAsBase64(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; MD2PDF/1.0)",
+        "Accept": "image/*",
+      },
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) return url;
+    const buf = await res.arrayBuffer();
+    const base64 = Buffer.from(buf).toString("base64");
+    const rawType = res.headers.get("content-type") || "image/png";
+    const contentType = rawType.split(";")[0]?.trim() || "image/png";
+    return `data:${contentType};base64,${base64}`;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Embed remote (http/https) images in HTML as base64 data URIs.
+ * Ensures Notion and other remote images render in PDF export.
+ */
+async function embedRemoteImagesInHtml(html: string): Promise<string> {
+  const imgRegex = /<img([^>]+)src=(["'])(https?:\/\/[^"']+)\2([^>]*)>/gi;
+  const matches = [...html.matchAll(imgRegex)];
+  if (matches.length === 0) return html;
+
+  const parts: string[] = [];
+  let lastIndex = 0;
+  for (const match of matches) {
+    const [full, before, , url, after] = match;
+    const matchIndex = match.index ?? 0;
+    parts.push(html.slice(lastIndex, matchIndex));
+    if (url.startsWith("data:")) {
+      parts.push(full);
+    } else {
+      const dataUri = await fetchImageAsBase64(url);
+      parts.push(`<img${before}src="${dataUri}"${after}>`);
+    }
+    lastIndex = matchIndex + full.length;
+  }
+  parts.push(html.slice(lastIndex));
+  return parts.join("");
+}
+
 /** Decode common HTML entities for highlight.js processing */
 function decodeHtmlEntities(text: string): string {
   return text
@@ -235,8 +286,11 @@ export async function generatePDF(
       // For HTML mode, use content directly with styles
       const styles = generatePDFStylesWithOptions(options);
 
+      // Embed remote images (e.g. from Notion import) as base64 so they render in PDF
+      const contentWithImages = await embedRemoteImagesInHtml(content);
+
       // Strip inline sizing styles so our PDF stylesheet controls the layout
-      const normalizedContent = normalizeHtmlForPdf(content);
+      const normalizedContent = normalizeHtmlForPdf(contentWithImages);
 
       // Apply syntax highlighting to code blocks before rendering
       const highlightedContent = highlightHtmlCodeBlocks(normalizedContent);

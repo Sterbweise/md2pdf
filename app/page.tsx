@@ -10,6 +10,7 @@ import ThankYouModal from "./components/ThankYouModal";
 import SupportModal from "./components/SupportModal";
 import type { PDFOptions } from "./lib/pdfStyles";
 import { embedImagesInHtml, embedImagesInMarkdown, type HtmlImageMap } from "./lib/htmlImageEmbedder";
+import { extractTitle } from "./lib/markdownParser";
 
 const defaultMarkdown = `# Welcome to MD to PDF
 
@@ -274,6 +275,23 @@ export default function Home() {
   );
 
   const handleNotionImport = useCallback((content: string, format: "markdown" | "html") => {
+    // Set document title from content: first # for MD, first <title> for HTML
+    const mdTitle = extractTitle(content);
+    let docTitle: string;
+    if (format === "markdown") {
+      docTitle = mdTitle === "Document" ? "document" : mdTitle;
+    } else {
+      const raw = content.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim();
+      if (!raw) {
+        docTitle = "document";
+      } else {
+        const div = document.createElement("div");
+        div.innerHTML = raw;
+        docTitle = div.textContent || raw;
+      }
+    }
+    setDocumentName(docTitle || "document");
+
     if (format === "html") {
       setHtml(content);
       setMode("html");

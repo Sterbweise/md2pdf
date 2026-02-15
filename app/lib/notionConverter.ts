@@ -338,16 +338,16 @@ async function fetchImageAsBase64(url: string): Promise<string> {
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; MD2PDF/1.0)",
-        "Accept": "image/*",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
       },
-      // Notion file URLs expire in 1h; fetch promptly
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(30000),
     });
     if (!res.ok) return url;
     const buf = await res.arrayBuffer();
     const base64 = Buffer.from(buf).toString("base64");
-    const contentType = res.headers.get("content-type") || "image/png";
+    const rawType = res.headers.get("content-type") || "image/png";
+    const contentType = rawType.split(";")[0]?.trim() || "image/png";
     return `data:${contentType};base64,${base64}`;
   } catch {
     return url;
