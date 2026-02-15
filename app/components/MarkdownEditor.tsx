@@ -464,13 +464,21 @@ export default function MarkdownEditor({
             style={toolbarStyle}
             className="format-toolbar"
           >
-            <div className="flex items-center bg-neutral-900 dark:bg-neutral-50 rounded-lg shadow-2xl shadow-black/30 dark:shadow-black/20 border border-neutral-700/80 dark:border-neutral-300/80 px-1 py-1 gap-0.5 backdrop-blur-sm">
+            <div
+              className="flex items-center px-1 py-1 gap-0.5"
+              style={{
+                backgroundColor: "rgb(23, 23, 23)",
+                borderRadius: "8px",
+                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4)",
+                border: "1px solid rgba(64,64,64,0.8)",
+              }}
+            >
               {FORMATS.map((format, i) => {
                 if (format.label === "divider") {
                   return (
                     <div
                       key={`div-${i}`}
-                      className="w-px h-5 bg-neutral-700 dark:bg-neutral-300 mx-0.5 flex-shrink-0"
+                      style={{ width: "1px", height: "20px", backgroundColor: "rgb(64,64,64)", margin: "0 2px", flexShrink: 0 }}
                     />
                   );
                 }
@@ -486,7 +494,16 @@ export default function MarkdownEditor({
                         ? `${format.label} (Ctrl+${format.shortcut})`
                         : format.label
                     }
-                    className="flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0 text-neutral-400 dark:text-neutral-500 hover:text-white dark:hover:text-neutral-900 hover:bg-neutral-700 dark:hover:bg-neutral-200 transition-all text-xs"
+                    className="flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0 transition-all text-xs"
+                    style={{ color: "rgb(163,163,163)" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "white";
+                      e.currentTarget.style.backgroundColor = "rgb(64,64,64)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "rgb(163,163,163)";
+                      e.currentTarget.style.backgroundColor = "transparent";
+                    }}
                   >
                     {format.icon}
                   </button>
@@ -494,8 +511,17 @@ export default function MarkdownEditor({
               })}
             </div>
             {/* Arrow */}
-            <div className="flex justify-center pointer-events-none">
-              <div className="w-2.5 h-2.5 bg-neutral-900 dark:bg-neutral-50 border-r border-b border-neutral-700/80 dark:border-neutral-300/80 rotate-45 -mt-[6px] ml-4" />
+            <div style={{ display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+              <div style={{
+                width: "10px",
+                height: "10px",
+                backgroundColor: "rgb(23,23,23)",
+                borderRight: "1px solid rgba(64,64,64,0.8)",
+                borderBottom: "1px solid rgba(64,64,64,0.8)",
+                transform: "rotate(45deg)",
+                marginTop: "-6px",
+                marginLeft: "16px",
+              }} />
             </div>
           </div>,
           document.body,

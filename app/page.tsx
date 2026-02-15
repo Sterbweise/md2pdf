@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import MarkdownEditor from "./components/MarkdownEditor";
 import PreviewPane from "./components/PreviewPane";
 import FileImportModal from "./components/FileImportModal";
@@ -159,6 +159,76 @@ const CONFIG = {
 
 type EditorMode = "markdown" | "html";
 
+const ROTATING_WORDS = ["Markdown", "Notion", "HTML"];
+
+function RotatingWord() {
+  const [index, setIndex] = useState(0);
+  const [animState, setAnimState] = useState<"visible" | "exit" | "enter">("visible");
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const cycle = () => {
+      // Start exit animation (slide up + fade out)
+      setAnimState("exit");
+
+      timeoutRef.current = setTimeout(() => {
+        // Switch word and start enter animation (slide down + fade in)
+        setIndex((prev) => (prev + 1) % ROTATING_WORDS.length);
+        setAnimState("enter");
+
+        timeoutRef.current = setTimeout(() => {
+          // Settle to visible
+          setAnimState("visible");
+        }, 400);
+      }, 400);
+    };
+
+    const interval = setInterval(cycle, 3000);
+    return () => {
+      clearInterval(interval);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  const word = ROTATING_WORDS[index];
+
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        position: "relative",
+        overflow: "hidden",
+        verticalAlign: "bottom",
+        height: "1.15em",
+        minWidth: "3ch",
+      }}
+    >
+      <span
+        style={{
+          display: "inline-block",
+          transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+          transform:
+            animState === "exit"
+              ? "translateY(-110%)"
+              : animState === "enter"
+                ? "translateY(0)"
+                : "translateY(0)",
+          opacity: animState === "exit" ? 0 : 1,
+          ...(animState === "enter" && {
+            animation: "slideDownIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards",
+          }),
+          background: "linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          backgroundClip: "text",
+        }}
+      >
+        {word}
+      </span>
+    </span>
+  );
+}
+
 export default function Home() {
   const [mode, setMode] = useState<EditorMode>("markdown");
   const [markdown, setMarkdown] = useState(defaultMarkdown);
@@ -294,7 +364,7 @@ export default function Home() {
                 aria-label="MD2PDF - Markdown to PDF Converter"
               >
                 <h1 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                  MD2PDF.my
+                  md2pdf.my
                 </h1>
               </button>
 
@@ -322,8 +392,18 @@ export default function Home() {
                   >
                     {documentName}
                     <span className="flex items-center gap-1 text-xs text-neutral-400 dark:text-neutral-500">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                        />
                       </svg>
                       rename me
                     </span>
@@ -540,7 +620,10 @@ export default function Home() {
       {/* Main Content */}
       <main role="main">
         <div className="max-w-screen-2xl mx-auto p-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0" style={{ height: "calc(100vh - 120px)" }}>
+          <div
+            className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0"
+            style={{ height: "calc(100vh - 120px)" }}
+          >
             {/* Left Column - Editor */}
             <div className="min-h-0 min-w-0">
               <MarkdownEditor
@@ -572,11 +655,11 @@ export default function Home() {
           {/* Hero SEO Block */}
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-neutral-900 dark:text-neutral-100 mb-4">
-              Free Markdown to PDF Converter Online
+              Free <RotatingWord /> to PDF Converter Online
             </h2>
             <p className="text-lg text-neutral-600 dark:text-neutral-400 max-w-3xl mx-auto leading-relaxed">
-              Convert Markdown to PDF, HTML to PDF, and Notion exports to PDF instantly.
-              No sign-up, no limits, no watermarks. 100% free and{" "}
+              Convert Markdown to PDF, HTML to PDF, and Notion exports to PDF
+              instantly. No sign-up, no limits, no watermarks. 100% free and{" "}
               <a
                 href={CONFIG.githubRepo}
                 target="_blank"
@@ -584,7 +667,8 @@ export default function Home() {
                 className="text-neutral-900 dark:text-neutral-200 underline hover:no-underline"
               >
                 open source
-              </a>.
+              </a>
+              .
             </p>
           </div>
 
@@ -595,9 +679,10 @@ export default function Home() {
                 Markdown to PDF
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                Convert your Markdown files (.md) to beautifully formatted PDF documents. Supports
-                GitHub Flavored Markdown with tables, task lists, code blocks with syntax highlighting,
-                blockquotes, images, and all standard Markdown syntax.
+                Convert your Markdown files (.md) to beautifully formatted PDF
+                documents. Supports GitHub Flavored Markdown with tables, task
+                lists, code blocks with syntax highlighting, blockquotes,
+                images, and all standard Markdown syntax.
               </p>
             </article>
 
@@ -606,9 +691,10 @@ export default function Home() {
                 Notion to PDF
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                Export your Notion pages and databases to PDF. Import Notion HTML exports directly,
-                including ZIP files with nested archives. Preserves formatting, tables, callouts,
-                and page structure from your Notion workspace.
+                Export your Notion pages and databases to PDF. Import Notion
+                HTML exports directly, including ZIP files with nested archives.
+                Preserves formatting, tables, callouts, and page structure from
+                your Notion workspace.
               </p>
             </article>
 
@@ -617,9 +703,10 @@ export default function Home() {
                 HTML to PDF
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                Convert raw HTML content to PDF with full CSS styling support. Switch to HTML mode,
-                paste your markup, and generate professional PDF documents. Perfect for converting
-                web pages, email templates, and HTML reports to PDF.
+                Convert raw HTML content to PDF with full CSS styling support.
+                Switch to HTML mode, paste your markup, and generate
+                professional PDF documents. Perfect for converting web pages,
+                email templates, and HTML reports to PDF.
               </p>
             </article>
 
@@ -628,9 +715,10 @@ export default function Home() {
                 Live Preview & Custom Formatting
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                See your document rendered in real-time as you type. Customize your PDF output
-                with 11+ fonts, adjustable margins, multiple page sizes (A4, Letter, Legal),
-                line height control, page numbers, and custom footer text.
+                See your document rendered in real-time as you type. Customize
+                your PDF output with 11+ fonts, adjustable margins, multiple
+                page sizes (A4, Letter, Legal), line height control, page
+                numbers, and custom footer text.
               </p>
             </article>
 
@@ -639,9 +727,10 @@ export default function Home() {
                 Free & Unlimited
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                MD2PDF is completely free to use with unlimited conversions. No account required,
-                no watermarks on your PDFs, no file size restrictions. Convert as many documents
-                as you need without any hidden costs or limitations.
+                MD2PDF is completely free to use with unlimited conversions. No
+                account required, no watermarks on your PDFs, no file size
+                restrictions. Convert as many documents as you need without any
+                hidden costs or limitations.
               </p>
             </article>
 
@@ -650,9 +739,10 @@ export default function Home() {
                 Open Source & Privacy-First
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                Built with transparency in mind. MD2PDF is open source under the MIT License.
-                Your documents are processed securely and never stored on our servers. Self-host
-                with Docker for complete control over your data.
+                Built with transparency in mind. MD2PDF is open source under the
+                MIT License. Your documents are processed securely and never
+                stored on our servers. Self-host with Docker for complete
+                control over your data.
               </p>
             </article>
           </div>
@@ -671,7 +761,8 @@ export default function Home() {
                   Write or Paste
                 </h3>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  Type Markdown, paste HTML, or import files (.md, .html, .txt, .zip)
+                  Type Markdown, paste HTML, or import files (.md, .html, .txt,
+                  .zip)
                 </p>
               </div>
               <div className="text-center">
@@ -716,77 +807,163 @@ export default function Home() {
               Frequently Asked Questions
             </h2>
             <div className="max-w-3xl mx-auto space-y-6">
-              <details className="group border border-neutral-200 dark:border-neutral-700 p-4" open>
+              <details
+                className="group border border-neutral-200 dark:border-neutral-700 p-4"
+                open
+              >
                 <summary className="font-semibold text-neutral-900 dark:text-neutral-100 cursor-pointer list-none flex items-center justify-between">
                   How do I convert Markdown to PDF for free?
-                  <svg className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <svg
+                    className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
                 </summary>
                 <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                  Simply paste or type your Markdown content into MD2PDF&apos;s editor, preview it in real-time,
-                  customize formatting options like fonts and margins, and click &quot;Export PDF&quot;.
-                  No sign-up required, completely free, and unlimited conversions.
+                  Simply paste or type your Markdown content into MD2PDF&apos;s
+                  editor, preview it in real-time, customize formatting options
+                  like fonts and margins, and click &quot;Export PDF&quot;. No
+                  sign-up required, completely free, and unlimited conversions.
                 </p>
               </details>
 
               <details className="group border border-neutral-200 dark:border-neutral-700 p-4">
                 <summary className="font-semibold text-neutral-900 dark:text-neutral-100 cursor-pointer list-none flex items-center justify-between">
                   Can I convert Notion pages to PDF?
-                  <svg className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <svg
+                    className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
                 </summary>
                 <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                  Yes! MD2PDF supports direct Notion imports. You can upload Notion HTML exports
-                  (including ZIP files with nested archives) and convert them to beautifully formatted
-                  PDFs with preserved formatting, tables, and callouts.
+                  Yes! MD2PDF supports direct Notion imports. You can upload
+                  Notion HTML exports (including ZIP files with nested archives)
+                  and convert them to beautifully formatted PDFs with preserved
+                  formatting, tables, and callouts.
                 </p>
               </details>
 
               <details className="group border border-neutral-200 dark:border-neutral-700 p-4">
                 <summary className="font-semibold text-neutral-900 dark:text-neutral-100 cursor-pointer list-none flex items-center justify-between">
                   Does MD2PDF support HTML to PDF conversion?
-                  <svg className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <svg
+                    className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
                 </summary>
                 <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                  Absolutely. MD2PDF has a dual-mode editor that supports both Markdown and HTML.
-                  Switch to HTML mode, paste your HTML content, and export it as a PDF with full
-                  styling support. Perfect for web pages, reports, and email templates.
+                  Absolutely. MD2PDF has a dual-mode editor that supports both
+                  Markdown and HTML. Switch to HTML mode, paste your HTML
+                  content, and export it as a PDF with full styling support.
+                  Perfect for web pages, reports, and email templates.
                 </p>
               </details>
 
               <details className="group border border-neutral-200 dark:border-neutral-700 p-4">
                 <summary className="font-semibold text-neutral-900 dark:text-neutral-100 cursor-pointer list-none flex items-center justify-between">
                   Is MD2PDF free and open source?
-                  <svg className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <svg
+                    className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
                 </summary>
                 <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                  Yes, MD2PDF is 100% free with no limits on conversions. It&apos;s open source under
-                  the MIT License and available on{" "}
-                  <a href={CONFIG.githubRepo} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">
+                  Yes, MD2PDF is 100% free with no limits on conversions.
+                  It&apos;s open source under the MIT License and available on{" "}
+                  <a
+                    href={CONFIG.githubRepo}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:no-underline"
+                  >
                     GitHub
-                  </a>. No account, sign-up, or payment is needed.
+                  </a>
+                  . No account, sign-up, or payment is needed.
                 </p>
               </details>
 
               <details className="group border border-neutral-200 dark:border-neutral-700 p-4">
                 <summary className="font-semibold text-neutral-900 dark:text-neutral-100 cursor-pointer list-none flex items-center justify-between">
                   What Markdown features are supported?
-                  <svg className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <svg
+                    className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
                 </summary>
                 <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                  MD2PDF supports GitHub Flavored Markdown (GFM) including tables, task lists,
-                  syntax-highlighted code blocks, blockquotes, images, links, bold, italic,
-                  strikethrough, headings, horizontal rules, and more.
+                  MD2PDF supports GitHub Flavored Markdown (GFM) including
+                  tables, task lists, syntax-highlighted code blocks,
+                  blockquotes, images, links, bold, italic, strikethrough,
+                  headings, horizontal rules, and more.
                 </p>
               </details>
 
               <details className="group border border-neutral-200 dark:border-neutral-700 p-4">
                 <summary className="font-semibold text-neutral-900 dark:text-neutral-100 cursor-pointer list-none flex items-center justify-between">
                   Can I customize the PDF output?
-                  <svg className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <svg
+                    className="w-5 h-5 text-neutral-400 group-open:rotate-180 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
                 </summary>
                 <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                  Yes. MD2PDF offers extensive customization: 11+ fonts (Inter, Roboto, JetBrains Mono, etc.),
-                  adjustable margins, multiple page sizes (A4, Letter, Legal), custom line height,
-                  font size options, page numbers, and footer text.
+                  Yes. MD2PDF offers extensive customization: 11+ fonts (Inter,
+                  Roboto, JetBrains Mono, etc.), adjustable margins, multiple
+                  page sizes (A4, Letter, Legal), custom line height, font size
+                  options, page numbers, and footer text.
                 </p>
               </details>
             </div>
@@ -799,20 +976,37 @@ export default function Home() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
               <div className="p-4 border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
-                <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">Documentation</h3>
-                <p className="text-neutral-500 dark:text-neutral-400 text-xs">Convert README.md and project docs to shareable PDFs</p>
+                <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                  Documentation
+                </h3>
+                <p className="text-neutral-500 dark:text-neutral-400 text-xs">
+                  Convert README.md and project docs to shareable PDFs
+                </p>
               </div>
               <div className="p-4 border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
-                <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">Notion Exports</h3>
-                <p className="text-neutral-500 dark:text-neutral-400 text-xs">Convert Notion pages and wikis to professionally formatted PDFs</p>
+                <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                  Notion Exports
+                </h3>
+                <p className="text-neutral-500 dark:text-neutral-400 text-xs">
+                  Convert Notion pages and wikis to professionally formatted
+                  PDFs
+                </p>
               </div>
               <div className="p-4 border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
-                <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">Reports & Resumes</h3>
-                <p className="text-neutral-500 dark:text-neutral-400 text-xs">Create formatted reports and resumes from Markdown or HTML</p>
+                <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                  Reports & Resumes
+                </h3>
+                <p className="text-neutral-500 dark:text-neutral-400 text-xs">
+                  Create formatted reports and resumes from Markdown or HTML
+                </p>
               </div>
               <div className="p-4 border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
-                <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">Academic Notes</h3>
-                <p className="text-neutral-500 dark:text-neutral-400 text-xs">Export lecture notes and study materials to clean PDF format</p>
+                <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                  Academic Notes
+                </h3>
+                <p className="text-neutral-500 dark:text-neutral-400 text-xs">
+                  Export lecture notes and study materials to clean PDF format
+                </p>
               </div>
             </div>
           </div>
@@ -820,28 +1014,61 @@ export default function Home() {
           {/* Keywords / Tags Cloud – helps signal relevance to crawlers */}
           <div className="text-center">
             <p className="text-xs text-neutral-400 dark:text-neutral-600 leading-loose">
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Markdown to PDF</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">MD to PDF</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Notion to PDF</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">HTML to PDF</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Free PDF Converter</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Open Source</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">GitHub Flavored Markdown</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Syntax Highlighting</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">No Sign-up</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Unlimited Conversions</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Live Preview</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Custom Fonts</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Notion Integration</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Self-Hosted</span>
-              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">Docker</span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Markdown to PDF
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                MD to PDF
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Notion to PDF
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                HTML to PDF
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Free PDF Converter
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Open Source
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                GitHub Flavored Markdown
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Syntax Highlighting
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                No Sign-up
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Unlimited Conversions
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Live Preview
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Custom Fonts
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Notion Integration
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Self-Hosted
+              </span>
+              <span className="inline-block px-2 py-1 m-0.5 border border-neutral-200 dark:border-neutral-700">
+                Docker
+              </span>
             </p>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="flex-shrink-0 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900" role="contentinfo">
+      <footer
+        className="flex-shrink-0 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+        role="contentinfo"
+      >
         <div className="max-w-screen-2xl mx-auto px-4 py-3">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
             {/* Left side - Credits */}
@@ -860,7 +1087,9 @@ export default function Home() {
               <span className="hidden sm:inline">·</span>
               <span className="hidden sm:inline">MIT License</span>
               <span className="hidden sm:inline">·</span>
-              <span className="hidden sm:inline">Free & Open Source Markdown to PDF Converter</span>
+              <span className="hidden sm:inline">
+                Free & Open Source Markdown to PDF Converter
+              </span>
             </div>
 
             {/* Right side - Links */}

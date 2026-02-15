@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
   --background: #ffffff;
@@ -325,6 +323,12 @@ body {
 .html-preview-content .code-wrap {
   white-space: pre-wrap !important;
   word-break: break-all;
+}
+
+/* Rotating word animation (hero heading) */
+@keyframes slideDownIn {
+  0% { transform: translateY(110%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
 }
 
 /* Modal animations */

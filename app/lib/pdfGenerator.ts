@@ -73,7 +73,7 @@ function normalizeHtmlForPdf(html: string): string {
   // Second: remove specific CSS properties from inline style attributes
   result = result.replace(/\sstyle="([^"]*)"/gi, (match, styleContent: string) => {
     // Remove size/spacing properties but keep others (like color, display, etc.)
-    let cleaned = styleContent
+    const cleaned = styleContent
       .replace(/font-size\s*:[^;]+;?/gi, "")
       .replace(/padding(-top|-right|-bottom|-left)?\s*:[^;]+;?/gi, "")
       .replace(/margin(-top|-right|-bottom|-left)?\s*:[^;]+;?/gi, "")
