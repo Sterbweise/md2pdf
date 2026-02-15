@@ -365,15 +365,23 @@ export async function generatePDF(
       preferCSSPageSize: false,
     };
 
-    // Add page numbers and/or footer if requested
-    if (options.showPageNumbers || options.footerText) {
+    // Add page numbers, header, and/or footer if requested
+    if (options.showPageNumbers || options.footerText || options.headerText) {
       pdfOptions.displayHeaderFooter = true;
-      pdfOptions.headerTemplate = "<span></span>";
-      
+
+      // Header template (custom header text only; page numbers stay in footer)
+      const headerContent = options.headerText
+        ? `
+          <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <span>${escapeHtml(options.headerText)}</span>
+          </div>
+        `
+        : "<span></span>";
+      pdfOptions.headerTemplate = headerContent;
+
+      // Footer template
       let footerContent = "";
-      
       if (options.footerText && options.showPageNumbers) {
-        // Both footer text and page numbers
         footerContent = `
           <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
             <span style="flex: 1; text-align: left;">${escapeHtml(options.footerText)}</span>
@@ -382,21 +390,20 @@ export async function generatePDF(
           </div>
         `;
       } else if (options.footerText) {
-        // Only footer text
         footerContent = `
           <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
             <span>${escapeHtml(options.footerText)}</span>
           </div>
         `;
-      } else {
-        // Only page numbers
+      } else if (options.showPageNumbers) {
         footerContent = `
           <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 0;">
             <span class="pageNumber"></span> / <span class="totalPages"></span>
           </div>
         `;
+      } else {
+        footerContent = "<span></span>";
       }
-      
       pdfOptions.footerTemplate = footerContent;
     }
 

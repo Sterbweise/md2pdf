@@ -619,6 +619,7 @@ export interface PDFOptions {
   lineHeight: LineHeight;
   customLineHeight?: number; // multiplier
   showPageNumbers: boolean;
+  headerText?: string;
   footerText?: string;
 }
 

@@ -34,6 +34,7 @@ export default function ExportOptions({
   });
   const [customFontSize, setCustomFontSize] = useState(options.customFontSize || 12);
   const [customLineHeight, setCustomLineHeight] = useState(options.customLineHeight || 1.6);
+  const [headerText, setHeaderText] = useState(options.headerText || "");
   const [footerText, setFooterText] = useState(options.footerText || "");
 
   // Update local state when options change
@@ -46,6 +47,9 @@ export default function ExportOptions({
     }
     if (options.customLineHeight) {
       setCustomLineHeight(options.customLineHeight);
+    }
+    if (options.headerText !== undefined) {
+      setHeaderText(options.headerText);
     }
     if (options.footerText !== undefined) {
       setFooterText(options.footerText);
@@ -117,6 +121,12 @@ export default function ExportOptions({
 
   const handlePageNumbersChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange({ ...options, showPageNumbers: e.target.checked });
+  };
+
+  const handleHeaderTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setHeaderText(value);
+    onChange({ ...options, headerText: value || undefined });
   };
 
   const handleFooterTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -406,6 +416,27 @@ export default function ExportOptions({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Header Text */}
+              <div>
+                <label
+                  htmlFor="headerText"
+                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
+                >
+                  Custom Header
+                </label>
+                <input
+                  id="headerText"
+                  type="text"
+                  value={headerText}
+                  onChange={handleHeaderTextChange}
+                  placeholder="e.g., Document Title or Company Name"
+                  className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm"
+                />
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                  Optional header text at top of each page
+                </p>
               </div>
 
               {/* Footer Text */}
