@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate-favicons": "node scripts/generate-favicons.mjs"
   },
   "dependencies": {
     "@notionhq/client": "^5.9.0",

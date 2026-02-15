@@ -3,6 +3,7 @@ import puppeteer, {
   type PDFOptions as PuppeteerPDFOptions,
 } from "puppeteer";
 import fs from "fs";
+import hljs from "highlight.js";
 import {
   markdownToHtml,
   wrapHtmlDocument,
@@ -14,6 +15,94 @@ import {
   getMargins,
   type PDFOptions,
 } from "./pdfStyles";
+
+/**
+ * Server-side syntax highlighting for HTML code blocks.
+ * Finds <code class="language-*"> elements and applies highlight.js classes
+ * so the PDF CSS can color them correctly.
+ */
+function highlightHtmlCodeBlocks(html: string): string {
+  // First pass: highlight <code class="language-XXX"> blocks
+  let result = html.replace(
+    /<code\s+class="language-(\w+)"([^>]*)>([\s\S]*?)<\/code>/gi,
+    (match, lang: string, attrs: string, code: string) => {
+      try {
+        const decoded = decodeHtmlEntities(code);
+        const highlighted = hljs.getLanguage(lang)
+          ? hljs.highlight(decoded, { language: lang, ignoreIllegals: true })
+          : hljs.highlightAuto(decoded);
+        return `<code class="hljs language-${lang}"${attrs}>${highlighted.value}</code>`;
+      } catch {
+        return match;
+      }
+    }
+  );
+
+  // Second pass: auto-detect plain <pre><code> blocks without language class
+  result = result.replace(
+    /<pre([^>]*)><code(?![^>]*class="hljs)([^>]*)>([\s\S]*?)<\/code><\/pre>/gi,
+    (match, preAttrs: string, codeAttrs: string, code: string) => {
+      try {
+        const decoded = decodeHtmlEntities(code);
+        if (decoded.trim().length < 10) return match;
+        const highlighted = hljs.highlightAuto(decoded);
+        return `<pre${preAttrs}><code class="hljs"${codeAttrs}>${highlighted.value}</code></pre>`;
+      } catch {
+        return match;
+      }
+    }
+  );
+
+  return result;
+}
+
+/**
+ * Strip inline style attributes from HTML that cause oversized PDF output.
+ * Removes font-size, padding, margin, width, min-width, max-width from inline styles
+ * so our PDF stylesheet takes control of sizing.
+ * Also strips @page CSS rules from embedded <style> blocks to prevent margin conflicts.
+ */
+function normalizeHtmlForPdf(html: string): string {
+  // First: strip @page rules from <style> blocks so they don't override our margins
+  let result = html.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (match, attrs: string, cssContent: string) => {
+    // Remove @page rules entirely
+    const cleaned = cssContent.replace(/@page\s*\{[^}]*\}/gi, "");
+    return `<style${attrs}>${cleaned}</style>`;
+  });
+
+  // Second: remove specific CSS properties from inline style attributes
+  result = result.replace(/\sstyle="([^"]*)"/gi, (match, styleContent: string) => {
+    // Remove size/spacing properties but keep others (like color, display, etc.)
+    let cleaned = styleContent
+      .replace(/font-size\s*:[^;]+;?/gi, "")
+      .replace(/padding(-top|-right|-bottom|-left)?\s*:[^;]+;?/gi, "")
+      .replace(/margin(-top|-right|-bottom|-left)?\s*:[^;]+;?/gi, "")
+      .replace(/width\s*:[^;]+;?/gi, "")
+      .replace(/min-width\s*:[^;]+;?/gi, "")
+      .replace(/max-width\s*:[^;]+;?/gi, "")
+      .replace(/min-height\s*:[^;]+;?/gi, "")
+      .replace(/line-height\s*:[^;]+;?/gi, "")
+      .trim();
+
+    // If nothing left, remove the style attribute entirely
+    if (!cleaned || cleaned === ";") return "";
+    return ` style="${cleaned}"`;
+  });
+
+  return result;
+}
+
+/** Decode common HTML entities for highlight.js processing */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&#x2F;/g, "/");
+}
 
 // Singleton browser instance for better performance
 let browserInstance: Browser | null = null;
@@ -144,23 +233,29 @@ export async function generatePDF(
       // For HTML mode, use content directly with styles
       const styles = generatePDFStylesWithOptions(options);
 
+      // Strip inline sizing styles so our PDF stylesheet controls the layout
+      const normalizedContent = normalizeHtmlForPdf(content);
+
+      // Apply syntax highlighting to code blocks before rendering
+      const highlightedContent = highlightHtmlCodeBlocks(normalizedContent);
+
       // Extract title from HTML if present
-      const titleMatch = content.match(/<title[^>]*>(.*?)<\/title>/i);
+      const titleMatch = highlightedContent.match(/<title[^>]*>(.*?)<\/title>/i);
       title = titleMatch ? titleMatch[1] : "Document";
 
       // Check if content is a full HTML document
       if (
-        content.trim().toLowerCase().startsWith("<!doctype") ||
-        content.trim().toLowerCase().startsWith("<html")
+        highlightedContent.trim().toLowerCase().startsWith("<!doctype") ||
+        highlightedContent.trim().toLowerCase().startsWith("<html")
       ) {
         // Inject styles into existing document
-        fullHtml = content.replace(
+        fullHtml = highlightedContent.replace(
           /<\/head>/i,
           `<style>${styles}</style></head>`
         );
       } else {
         // Wrap partial HTML in complete document
-        fullHtml = wrapHtmlDocument(content, styles, title);
+        fullHtml = wrapHtmlDocument(highlightedContent, styles, title);
       }
     } else {
       // For Markdown mode, convert to HTML first
@@ -196,6 +291,7 @@ export async function generatePDF(
 
     // Get margin preset or custom margins
     const margins = getMargins(options);
+    console.log(`[PDF] Margins: ${options.margins} → top=${margins.top}, right=${margins.right}, bottom=${margins.bottom}, left=${margins.left}`);
 
     // Configure PDF options
     const pdfOptions: PuppeteerPDFOptions = {

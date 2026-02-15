@@ -12,8 +12,8 @@ export const pdfStyles = `
 }
 
 html {
-  font-size: 12pt;
-  line-height: 1.6;
+  font-size: 11pt;
+  line-height: 1.5;
 }
 
 body {
@@ -22,6 +22,24 @@ body {
   background: white;
   padding: 0;
   margin: 0;
+  font-size: 11pt !important;
+  line-height: 1.5 !important;
+}
+
+/* Override inline styles from source HTML (Notion exports, etc.) */
+.document-content span,
+.document-content div:not(.document-content),
+.document-content a,
+.document-content em,
+.document-content strong,
+.document-content b,
+.document-content i {
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+.document-content * {
+  max-width: 100%;
 }
 
 /* ===========================================
@@ -124,37 +142,37 @@ aside {
    =========================================== */
 
 h1 {
-  font-size: 24pt;
+  font-size: 20pt !important;
   font-weight: 700;
-  margin: 20pt 0 10pt 0;
-  padding-bottom: 6pt;
+  margin: 16pt 0 8pt 0;
+  padding-bottom: 5pt;
   border-bottom: 2px solid #e5e7eb;
 }
 
 h2 {
-  font-size: 18pt;
+  font-size: 16pt !important;
   font-weight: 600;
-  margin: 16pt 0 8pt 0;
-  padding-bottom: 4pt;
+  margin: 14pt 0 6pt 0;
+  padding-bottom: 3pt;
   border-bottom: 1px solid #e5e7eb;
 }
 
 h3 {
-  font-size: 14pt;
+  font-size: 13pt !important;
   font-weight: 600;
-  margin: 14pt 0 6pt 0;
+  margin: 12pt 0 5pt 0;
 }
 
 h4 {
-  font-size: 12pt;
+  font-size: 11pt !important;
   font-weight: 600;
-  margin: 12pt 0 6pt 0;
+  margin: 10pt 0 5pt 0;
 }
 
 h5, h6 {
-  font-size: 11pt;
+  font-size: 10pt !important;
   font-weight: 600;
-  margin: 10pt 0 4pt 0;
+  margin: 8pt 0 4pt 0;
 }
 
 /* Reduce top margin when heading is first on a new page */
@@ -168,8 +186,9 @@ h4:first-child, h5:first-child, h6:first-child {
    =========================================== */
 
 p {
-  margin: 0 0 10pt 0;
+  margin: 0 0 8pt 0;
   text-align: left;
+  font-size: 11pt !important;
 }
 
 /* Links */
@@ -183,12 +202,13 @@ a {
    =========================================== */
 
 ul, ol {
-  margin: 0 0 10pt 0;
-  padding-left: 24pt;
+  margin: 0 0 8pt 0;
+  padding-left: 20pt;
 }
 
 li {
-  margin-bottom: 3pt;
+  margin-bottom: 2pt;
+  font-size: 11pt !important;
 }
 
 ul {
@@ -231,8 +251,8 @@ ul.task-list input[type="checkbox"] {
    =========================================== */
 
 blockquote {
-  margin: 10pt 0;
-  padding: 8pt 16pt;
+  margin: 8pt 0;
+  padding: 6pt 14pt;
   border-left: 3pt solid #d1d5db;
   background: #f9fafb;
   font-style: italic;
@@ -259,10 +279,11 @@ hr {
 
 table {
   width: 100%;
+  max-width: 100%;
   table-layout: auto;
   border-collapse: collapse;
-  margin: 10pt 0;
-  font-size: 10pt;
+  margin: 8pt 0;
+  font-size: 9pt !important;
 }
 
 thead {
@@ -276,7 +297,9 @@ tbody {
 
 th, td {
   word-wrap: break-word;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
   hyphens: auto;
   padding: 6pt 10pt;
   border: 1px solid #d1d5db;
@@ -297,21 +320,15 @@ tbody tr:nth-child(even) td {
   background-color: #f9fafb;
 }
 
-/* Reasonable column constraints */
-td, th {
-  min-width: 40pt;
-  max-width: 250pt;
-}
-
 /* ===========================================
    CODE - Inline
    =========================================== */
 
 code {
   font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, monospace;
-  font-size: 9pt;
+  font-size: 8.5pt !important;
   background-color: #f3f4f6;
-  padding: 1pt 4pt;
+  padding: 1pt 3pt;
   border-radius: 2pt;
   color: #be185d;
 }
@@ -322,13 +339,13 @@ code {
 
 pre {
   font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, monospace;
-  font-size: 9pt;
+  font-size: 8.5pt !important;
   background-color: #1f2937;
   color: #e5e7eb;
-  padding: 10pt;
+  padding: 8pt;
   border-radius: 4pt;
-  overflow-x: auto;
-  margin: 10pt 0;
+  overflow-x: hidden;
+  margin: 8pt 0;
   white-space: pre-wrap;
   word-wrap: break-word;
   /* Allow long code blocks to break across pages */
@@ -665,8 +682,8 @@ export function generatePDFStylesWithOptions(options: PDFOptions): string {
   // Determine font size multiplier
   let multiplier: number;
   if (options.fontSize === "custom" && options.customFontSize) {
-    // Custom font size: calculate multiplier based on 12pt base
-    multiplier = options.customFontSize / 12;
+    // Custom font size: calculate multiplier based on 11pt base
+    multiplier = options.customFontSize / 11;
   } else {
     multiplier = fontSizeMultipliers[options.fontSize as keyof typeof fontSizeMultipliers] || 1;
   }
@@ -684,10 +701,10 @@ export function generatePDFStylesWithOptions(options: PDFOptions): string {
 
   let styles = pdfStyles;
 
-  // Apply font size multiplier
-  styles = styles.replace(/font-size:\s*([\d.]+)pt/g, (match, size) => {
+  // Apply font size multiplier (preserve !important if present)
+  styles = styles.replace(/font-size:\s*([\d.]+)pt(\s*!important)?/g, (match, size, important) => {
     const newSize = parseFloat(size) * multiplier;
-    return `font-size: ${newSize.toFixed(1)}pt`;
+    return `font-size: ${newSize.toFixed(1)}pt${important || ""}`;
   });
 
   // Apply body font family (exclude code blocks)
@@ -711,6 +728,15 @@ export function generatePDFStylesWithOptions(options: PDFOptions): string {
     /(html\s*\{[^}]*line-height:)[^;]+;/g,
     `$1 ${lineHeight};`
   );
+
+  // Append @page rule with the correct margins
+  // This ensures CSS margins match Puppeteer margins and override any source HTML @page rules
+  const margins = getMargins(options);
+  styles += `
+@page {
+  margin: ${margins.top} ${margins.right} ${margins.bottom} ${margins.left} !important;
+}
+`;
 
   return styles;
 }

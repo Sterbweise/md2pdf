@@ -141,20 +141,15 @@ body {
   @apply font-semibold text-neutral-900 dark:text-neutral-100;
 }
 
-/* HTML Preview Container */
-.html-preview-container {
-  @apply w-full h-full overflow-auto bg-white dark:bg-neutral-900;
-  contain: layout style paint;
-  isolation: isolate;
-}
-
+/* HTML Preview Content */
 .html-preview-content {
-  @apply p-4;
   width: 100% !important;
   max-width: 100%;
   box-sizing: border-box;
   margin: 0;
   color: inherit;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
 }
 
 .html-preview-content * {
@@ -243,14 +238,16 @@ body {
 .html-preview-content table {
   @apply w-full border-collapse my-4 text-sm;
   table-layout: auto !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
 }
 
 .html-preview-content th,
 .html-preview-content td {
   @apply px-4 py-2 border border-neutral-300 dark:border-neutral-600;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  max-width: none !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  white-space: normal !important;
 }
 
 .html-preview-content th {
@@ -268,14 +265,15 @@ body {
   width: 100% !important;
 }
 
-.html-preview-content code {
+.html-preview-content code:not(pre code) {
   @apply font-mono text-sm bg-neutral-100 dark:bg-neutral-800 px-1;
-  white-space: pre-wrap !important;
 }
 
-.html-preview-content pre code {
-  @apply bg-transparent p-0;
+.html-preview-content pre code,
+.html-preview-content pre code.hljs {
+  @apply bg-transparent p-0 text-neutral-100;
   white-space: pre-wrap !important;
+  background: transparent !important;
 }
 
 .html-preview-content img {
@@ -290,9 +288,9 @@ body {
   @apply my-6 border-neutral-300 dark:border-neutral-600;
 }
 
-/* Syntax Highlighting (highlight.js) */
+/* Syntax Highlighting (highlight.js + HTML preview code blocks) */
 .hljs {
-  @apply bg-transparent;
+  background: transparent !important;
 }
 
 .hljs-keyword,
@@ -322,6 +320,52 @@ body {
 .hljs-variable,
 .hljs-params {
   @apply text-cyan-400;
+}
+
+.html-preview-content .code-wrap {
+  white-space: pre-wrap !important;
+  word-break: break-all;
+}
+
+/* Modal animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes toolbar-in {
+  from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
+  to { opacity: 1; max-height: 44px; }
+}
+@keyframes toolbar-pop {
+  0% { opacity: 0; transform: scale(0.9) translateY(4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+.animate-modal-in {
+  animation: modal-in 0.25s ease-out;
+}
+.animate-toolbar-in {
+  animation: toolbar-in 0.15s ease-out;
+}
+
+/* Floating format toolbar */
+.format-toolbar {
+  animation: toolbar-pop 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Hide scrollbar for toolbar */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 /* Editor styles */

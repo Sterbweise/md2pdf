@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
+import hljs from "highlight.js";
 import type { Components } from "react-markdown";
 
 interface PreviewPaneProps {
@@ -19,10 +20,72 @@ function sanitizeHtmlForPreview(html: string): string {
   return sanitized;
 }
 
+/**
+ * Use highlight.js to syntax-highlight all code blocks inside HTML preview.
+ * Finds <code class="language-*"> elements and runs hljs on them.
+ */
+function highlightCodeBlocks(container: HTMLElement) {
+  // Find all code elements with a language class
+  const codeBlocks = container.querySelectorAll<HTMLElement>(
+    'code[class*="language-"]',
+  );
+
+  codeBlocks.forEach((block) => {
+    // Skip if already highlighted by hljs
+    if (block.classList.contains("hljs")) return;
+
+    // Extract language name from class
+    const langClass = Array.from(block.classList).find((c) =>
+      c.startsWith("language-"),
+    );
+    if (!langClass) return;
+    const lang = langClass.replace("language-", "").toLowerCase();
+
+    // Get the raw text content
+    const code = block.textContent || "";
+    if (!code.trim()) return;
+
+    try {
+      // Try language-specific highlighting first
+      const result = hljs.getLanguage(lang)
+        ? hljs.highlight(code, { language: lang, ignoreIllegals: true })
+        : hljs.highlightAuto(code);
+
+      block.innerHTML = result.value;
+      block.classList.add("hljs");
+    } catch {
+      // If highlighting fails, try auto-detection
+      try {
+        const result = hljs.highlightAuto(code);
+        block.innerHTML = result.value;
+        block.classList.add("hljs");
+      } catch {
+        // Silently fail - code stays unhighlighted
+      }
+    }
+  });
+
+  // Also highlight any <pre><code> blocks without language class (auto-detect)
+  const plainBlocks = container.querySelectorAll<HTMLElement>("pre > code:not(.hljs):not([class*='language-'])");
+  plainBlocks.forEach((block) => {
+    const code = block.textContent || "";
+    if (!code.trim() || code.length < 10) return;
+    try {
+      const result = hljs.highlightAuto(code);
+      if (result.language) {
+        block.innerHTML = result.value;
+        block.classList.add("hljs");
+      }
+    } catch {
+      // Silently fail
+    }
+  });
+}
+
 const components: Components = {
   table: ({ children, ...props }) => (
-    <div className="overflow-x-auto my-4">
-      <table className="min-w-full border-collapse text-sm" {...props}>
+    <div className="my-4 w-full max-w-full">
+      <table className="w-full border-collapse text-sm" style={{ tableLayout: "auto", wordBreak: "break-word" }} {...props}>
         {children}
       </table>
     </div>
@@ -35,6 +98,7 @@ const components: Components = {
   th: ({ children, ...props }) => (
     <th
       className="px-4 py-2 text-left font-semibold border border-neutral-300 dark:border-neutral-600"
+      style={{ overflowWrap: "anywhere", wordBreak: "break-word", whiteSpace: "normal" }}
       {...props}
     >
       {children}
@@ -43,6 +107,7 @@ const components: Components = {
   td: ({ children, ...props }) => (
     <td
       className="px-4 py-2 border border-neutral-300 dark:border-neutral-600"
+      style={{ overflowWrap: "anywhere", wordBreak: "break-word", whiteSpace: "normal" }}
       {...props}
     >
       {children}
@@ -192,6 +257,14 @@ export default function PreviewPane({
   mode = "markdown",
 }: PreviewPaneProps) {
   const isEmpty = !markdown.trim();
+  const htmlContentRef = useRef<HTMLDivElement>(null);
+
+  // Highlight code blocks in HTML mode after render
+  useEffect(() => {
+    if (mode === "html" && htmlContentRef.current && !isEmpty) {
+      highlightCodeBlocks(htmlContentRef.current);
+    }
+  }, [markdown, mode, isEmpty]);
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 overflow-hidden min-w-0">
@@ -206,7 +279,7 @@ export default function PreviewPane({
       </div>
 
       {/* Preview Content */}
-      <div className="flex-1 overflow-auto p-6 min-w-0">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 min-w-0">
         {isEmpty ? (
           <div className="h-full flex items-center justify-center text-neutral-400 dark:text-neutral-500">
             <div className="text-center">
@@ -227,14 +300,13 @@ export default function PreviewPane({
             </div>
           </div>
         ) : mode === "html" ? (
-          <div className="html-preview-container">
-            <div
-              className="html-preview-content"
-              dangerouslySetInnerHTML={{
-                __html: sanitizeHtmlForPreview(markdown),
-              }}
-            />
-          </div>
+          <div
+            ref={htmlContentRef}
+            className="html-preview-content"
+            dangerouslySetInnerHTML={{
+              __html: sanitizeHtmlForPreview(markdown),
+            }}
+          />
         ) : (
           <div className="markdown-preview prose prose-neutral dark:prose-invert max-w-none">
             <ReactMarkdown
