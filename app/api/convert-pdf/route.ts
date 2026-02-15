@@ -20,6 +20,7 @@ interface ConvertRequest {
   mode?: "markdown" | "html";
   options?: Partial<PDFOptions>;
   filename?: string;
+  documentTitle?: string;
 }
 
 function validatePageSize(value: unknown): value is PageSize {
@@ -119,14 +120,23 @@ export async function POST(request: NextRequest) {
       footerText: body.options?.footerText,
     };
 
-    // Generate PDF
-    const pdfBuffer = await generatePDFWithTimeout(content, options, mode);
+    // Generate PDF (documentTitle overrides content-derived title for <title> tag)
+    const documentTitle = body.documentTitle?.trim();
+    const pdfBuffer = await generatePDFWithTimeout(
+      content,
+      options,
+      mode,
+      60000,
+      documentTitle
+    );
 
-    // Generate filename
+    // Generate filename: prefer documentTitle, else extract from content
     const title =
-      mode === "html"
-        ? content.match(/<title[^>]*>(.*?)<\/title>/i)?.[1] || "document"
-        : extractTitle(content);
+      documentTitle ||
+      (mode === "html"
+        ? content.match(/<title[^>]*>(.*?)<\/title>/i)?.[1]
+        : extractTitle(content)) ||
+      "document";
     const safeTitle = title
       .replace(/[^a-zA-Z0-9\s-]/g, "")
       .replace(/\s+/g, "-")

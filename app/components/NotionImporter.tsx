@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 
 interface NotionImporterProps {
-  onImport: (markdown: string) => void;
+  onImport: (content: string, format: "markdown" | "html") => void;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -15,6 +15,7 @@ export default function NotionImporter({
 }: NotionImporterProps) {
   const [pageUrl, setPageUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [format, setFormat] = useState<"html" | "markdown">("html");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rememberKey, setRememberKey] = useState(false);
@@ -50,6 +51,7 @@ export default function NotionImporter({
         body: JSON.stringify({
           pageUrl: pageUrl.trim(),
           apiKey: apiKey.trim(),
+          format,
         }),
       });
 
@@ -65,7 +67,8 @@ export default function NotionImporter({
         localStorage.removeItem("notion_api_key");
       }
 
-      onImport(data.markdown);
+      const content = format === "html" ? data.html : data.markdown;
+      onImport(content, format);
       onClose();
       setPageUrl("");
     } catch (err) {
@@ -73,7 +76,7 @@ export default function NotionImporter({
     } finally {
       setIsLoading(false);
     }
-  }, [pageUrl, apiKey, rememberKey, onImport, onClose]);
+  }, [pageUrl, apiKey, format, rememberKey, onImport, onClose]);
 
   if (!isOpen) return null;
 
@@ -187,6 +190,74 @@ export default function NotionImporter({
               placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxx"
               className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 transition-colors text-sm"
             />
+          </div>
+
+          {/* Format Selection */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
+              Export Format
+            </label>
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="radio"
+                  name="format"
+                  value="html"
+                  checked={format === "html"}
+                  onChange={() => setFormat("html")}
+                  className="sr-only"
+                />
+                <span
+                  className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
+                    format === "html"
+                      ? "border-neutral-900 dark:border-neutral-100 bg-neutral-900 dark:bg-neutral-100"
+                      : "border-neutral-300 dark:border-neutral-600 bg-neutral-200 dark:bg-neutral-700"
+                  }`}
+                >
+                  {format === "html" && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-neutral-900" />
+                  )}
+                </span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100 group-hover:text-neutral-700 dark:group-hover:text-neutral-300">
+                    HTML <span className="text-xs font-normal text-neutral-500">(Recommended)</span>
+                  </div>
+                  <div className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                    Perfect replica of your Notion page with all formatting preserved
+                  </div>
+                </div>
+              </label>
+              
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="radio"
+                  name="format"
+                  value="markdown"
+                  checked={format === "markdown"}
+                  onChange={() => setFormat("markdown")}
+                  className="sr-only"
+                />
+                <span
+                  className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
+                    format === "markdown"
+                      ? "border-neutral-900 dark:border-neutral-100 bg-neutral-900 dark:bg-neutral-100"
+                      : "border-neutral-300 dark:border-neutral-600 bg-neutral-200 dark:bg-neutral-700"
+                  }`}
+                >
+                  {format === "markdown" && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white dark:bg-neutral-900" />
+                  )}
+                </span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100 group-hover:text-neutral-700 dark:group-hover:text-neutral-300">
+                    Markdown
+                  </div>
+                  <div className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                    Easy to edit if modifications needed. Some Notion blocks may be adapted or simplified.
+                  </div>
+                </div>
+              </label>
+            </div>
           </div>
 
           {/* Remember Key */}

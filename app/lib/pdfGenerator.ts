@@ -214,11 +214,13 @@ export async function closeBrowser(): Promise<void> {
 
 /**
  * Generate PDF from markdown or HTML content
+ * @param documentTitle - Override for the HTML <title> tag (e.g. document filename)
  */
 export async function generatePDF(
   content: string,
   options: PDFOptions,
-  mode: "markdown" | "html" = "markdown"
+  mode: "markdown" | "html" = "markdown",
+  documentTitle?: string
 ): Promise<Buffer> {
   const browser = await getBrowser();
 
@@ -239,20 +241,27 @@ export async function generatePDF(
       // Apply syntax highlighting to code blocks before rendering
       const highlightedContent = highlightHtmlCodeBlocks(normalizedContent);
 
-      // Extract title from HTML if present
+      // Use documentTitle (filename) if provided, else extract from HTML
       const titleMatch = highlightedContent.match(/<title[^>]*>(.*?)<\/title>/i);
-      title = titleMatch ? titleMatch[1] : "Document";
+      title = documentTitle || (titleMatch ? titleMatch[1] : "Document");
 
       // Check if content is a full HTML document
       if (
         highlightedContent.trim().toLowerCase().startsWith("<!doctype") ||
         highlightedContent.trim().toLowerCase().startsWith("<html")
       ) {
-        // Inject styles into existing document
-        fullHtml = highlightedContent.replace(
+        // Inject styles and optionally override <title>
+        let docHtml = highlightedContent.replace(
           /<\/head>/i,
           `<style>${styles}</style></head>`
         );
+        if (documentTitle) {
+          docHtml = docHtml.replace(
+            /<title[^>]*>[\s\S]*?<\/title>/i,
+            `<title>${escapeHtml(documentTitle)}</title>`
+          );
+        }
+        fullHtml = docHtml;
       } else {
         // Wrap partial HTML in complete document
         fullHtml = wrapHtmlDocument(highlightedContent, styles, title);
@@ -261,7 +270,8 @@ export async function generatePDF(
       // For Markdown mode, convert to HTML first
       const sanitizedMarkdown = sanitizeMarkdown(content);
       const htmlContent = await markdownToHtml(sanitizedMarkdown);
-      title = extractTitle(content);
+      // Use documentTitle (filename) if provided, else first H1
+      title = documentTitle || extractTitle(content);
 
       // Generate styles with font size adjustments
       const styles = generatePDFStylesWithOptions(options);
@@ -356,10 +366,11 @@ export async function generatePDFWithTimeout(
   content: string,
   options: PDFOptions,
   mode: "markdown" | "html" = "markdown",
-  timeoutMs: number = 60000
+  timeoutMs: number = 60000,
+  documentTitle?: string
 ): Promise<Buffer> {
   return Promise.race([
-    generatePDF(content, options, mode),
+    generatePDF(content, options, mode, documentTitle),
     new Promise<Buffer>((_, reject) =>
       setTimeout(() => reject(new Error("PDF generation timed out")), timeoutMs)
     ),

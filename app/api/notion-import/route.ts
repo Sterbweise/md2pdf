@@ -7,6 +7,7 @@ export const maxDuration = 30;
 interface ImportRequest {
   pageUrl: string;
   apiKey: string;
+  format?: "markdown" | "html";
 }
 
 export async function POST(request: NextRequest) {
@@ -51,15 +52,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch and convert Notion page
-    const { markdown, title } = await fetchNotionPage(
+    const format = body.format || "html";
+    const result = await fetchNotionPage(
       body.pageUrl,
-      body.apiKey
+      body.apiKey,
+      format
     );
 
     return NextResponse.json({
       success: true,
-      markdown,
-      title,
+      markdown: result.markdown,
+      html: result.html,
+      title: result.title,
     });
   } catch (error) {
     console.error("Notion import error:", error);

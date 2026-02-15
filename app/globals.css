@@ -91,6 +91,7 @@ body {
 /* Table Styles - Critical for proper rendering */
 .markdown-preview table {
   @apply w-full border-collapse mb-4 text-sm;
+  table-layout: auto;
 }
 
 .markdown-preview thead {
@@ -99,10 +100,21 @@ body {
 
 .markdown-preview th {
   @apply px-4 py-2 text-left font-semibold border border-neutral-300 dark:border-neutral-600;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .markdown-preview td {
   @apply px-4 py-2 border border-neutral-300 dark:border-neutral-600;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Shrink middle column (e.g. Type) in 3+ column tables so Name/Value get more space */
+.markdown-preview table:has(td:nth-child(3)) th:nth-child(2),
+.markdown-preview table:has(td:nth-child(3)) td:nth-child(2) {
+  width: 1%;
+  white-space: nowrap;
 }
 
 .markdown-preview tbody tr:nth-child(even) {
@@ -147,7 +159,7 @@ body {
   margin: 0;
   color: inherit;
   overflow-x: hidden;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .html-preview-content * {
@@ -243,9 +255,16 @@ body {
 .html-preview-content th,
 .html-preview-content td {
   @apply px-4 py-2 border border-neutral-300 dark:border-neutral-600;
-  overflow-wrap: anywhere !important;
+  overflow-wrap: break-word !important;
   word-break: break-word !important;
   white-space: normal !important;
+}
+
+/* Shrink middle column (e.g. Type) in 3+ column tables so Name/Value get more space */
+.html-preview-content table:has(td:nth-child(3)) th:nth-child(2),
+.html-preview-content table:has(td:nth-child(3)) td:nth-child(2) {
+  width: 1% !important;
+  white-space: nowrap !important;
 }
 
 .html-preview-content th {

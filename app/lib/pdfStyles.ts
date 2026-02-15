@@ -297,7 +297,7 @@ tbody {
 
 th, td {
   word-wrap: break-word;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: break-word;
   white-space: normal;
   hyphens: auto;
@@ -305,6 +305,13 @@ th, td {
   border: 1px solid #d1d5db;
   text-align: left;
   vertical-align: top;
+}
+
+/* For 3+ column tables: shrink middle column (often Type/Code) so Name/Value get more space */
+table:has(td:nth-child(3)) th:nth-child(2),
+table:has(td:nth-child(3)) td:nth-child(2) {
+  width: 1%;
+  white-space: nowrap;
 }
 
 th {

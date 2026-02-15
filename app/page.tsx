@@ -9,7 +9,7 @@ import NotionImporter from "./components/NotionImporter";
 import ThankYouModal from "./components/ThankYouModal";
 import SupportModal from "./components/SupportModal";
 import type { PDFOptions } from "./lib/pdfStyles";
-import { embedImagesInHtml, type HtmlImageMap } from "./lib/htmlImageEmbedder";
+import { embedImagesInHtml, embedImagesInMarkdown, type HtmlImageMap } from "./lib/htmlImageEmbedder";
 
 const defaultMarkdown = `# Welcome to MD to PDF
 
@@ -273,10 +273,16 @@ export default function Home() {
     [],
   );
 
-  const handleNotionImport = useCallback((content: string) => {
-    setMarkdown(content);
-    setMode("markdown");
-    setHtmlImageMap(null);
+  const handleNotionImport = useCallback((content: string, format: "markdown" | "html") => {
+    if (format === "html") {
+      setHtml(content);
+      setMode("html");
+      setHtmlImageMap(null);
+    } else {
+      setMarkdown(content);
+      setMode("markdown");
+      setHtmlImageMap(null);
+    }
   }, []);
 
   const handleExportPDF = useCallback(async () => {
@@ -288,10 +294,10 @@ export default function Home() {
     setIsExporting(true);
 
     try {
-      const htmlForExport =
+      const contentForExport =
         mode === "html"
           ? embedImagesInHtml(currentContent, htmlImageMap)
-          : currentContent;
+          : embedImagesInMarkdown(currentContent, htmlImageMap);
 
       const response = await fetch("/api/convert-pdf", {
         method: "POST",
@@ -299,11 +305,12 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          markdown: mode === "markdown" ? currentContent : undefined,
-          html: mode === "html" ? htmlForExport : undefined,
+          markdown: mode === "markdown" ? contentForExport : undefined,
+          html: mode === "html" ? contentForExport : undefined,
           mode,
           options,
           filename: `${documentName}.pdf`,
+          documentTitle: documentName,
         }),
       });
 

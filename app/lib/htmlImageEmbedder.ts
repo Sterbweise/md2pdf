@@ -45,3 +45,24 @@ export function embedImagesInHtml(
 
   return content;
 }
+
+/**
+ * Embed images in markdown by replacing relative paths with data URIs from imageMap.
+ * Used when exporting to PDF so images from ZIP imports render correctly.
+ */
+export function embedImagesInMarkdown(
+  markdown: string,
+  imageMap?: HtmlImageMap | null
+): string {
+  if (!imageMap || Object.keys(imageMap).length === 0) {
+    return markdown;
+  }
+
+  return markdown.replace(
+    /!\[([^\]]*)\]\(([^)]+)\)/g,
+    (match, alt, src) => {
+      const dataUri = findDataUri(src, imageMap);
+      return dataUri ? `![${alt}](${dataUri})` : match;
+    }
+  );
+}
