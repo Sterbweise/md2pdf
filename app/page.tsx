@@ -8,6 +8,7 @@ import ExportOptions from "./components/ExportOptions";
 import NotionImporter from "./components/NotionImporter";
 import ThankYouModal from "./components/ThankYouModal";
 import SupportModal from "./components/SupportModal";
+import ThemeToggle from "./components/ThemeToggle";
 import type { PDFOptions } from "./lib/pdfStyles";
 import { embedImagesInHtml, embedImagesInMarkdown, type HtmlImageMap } from "./lib/htmlImageEmbedder";
 import { extractTitle } from "./lib/markdownParser";
@@ -439,6 +440,9 @@ export default function Home() {
 
             {/* Actions */}
             <div className="flex items-center gap-1">
+              {/* Theme Toggle */}
+              <ThemeToggle />
+
               {/* Mode Toggle */}
               <div className="hidden md:flex items-center border border-neutral-200 dark:border-neutral-700 mr-2">
                 <button

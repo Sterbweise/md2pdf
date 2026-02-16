@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { ThemeProvider } from "./components/ThemeProvider";
 
 const SITE_URL = "https://md2pdf.my";
 const SITE_NAME = "MD2PDF";
@@ -329,14 +330,17 @@ function JsonLd() {
   );
 }
 
+const themeInitScript = `(function(){var t=localStorage.getItem('md2pdf-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;var dark=t==='dark'||(t!=='light'&&d);var r=document.documentElement;r.classList.toggle('dark',dark);r.setAttribute('data-theme',dark?'dark':'light');})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <JsonLd />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -345,7 +349,9 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body className="antialiased font-sans">{children}</body>
+      <body className="antialiased font-sans">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }
