@@ -12,6 +12,9 @@
 
 Modern Markdown and HTML to PDF converter with smart formatting and Notion export support. **100% free, open source, unlimited conversions.**
 
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/bcb26c87-42d1-4093-9d44-9a93d589349b" />
+
+
 ## Features
 
 - **Dual Mode** – Convert Markdown or HTML to PDF
