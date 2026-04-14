@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
         : "normal",
       customLineHeight: body.options?.customLineHeight,
       showPageNumbers: body.options?.showPageNumbers ?? false,
+      justifyText: body.options?.justifyText ?? false,
       headerText: body.options?.headerText,
       footerText: body.options?.footerText,
     };

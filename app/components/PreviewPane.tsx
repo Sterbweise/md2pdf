@@ -7,10 +7,12 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import hljs from "highlight.js";
 import type { Components } from "react-markdown";
+import type { PDFOptions } from "../lib/pdfStyles";
 
 interface PreviewPaneProps {
   markdown: string;
   mode?: "markdown" | "html";
+  options?: PDFOptions;
 }
 
 function sanitizeHtmlForPreview(html: string): string {
@@ -256,7 +258,9 @@ const components: Components = {
 export default function PreviewPane({
   markdown,
   mode = "markdown",
+  options,
 }: PreviewPaneProps) {
+  const justifyText = options?.justifyText ?? false;
   const isEmpty = !markdown.trim();
   const htmlContentRef = useRef<HTMLDivElement>(null);
 
@@ -313,7 +317,18 @@ export default function PreviewPane({
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeHighlight, rehypeRaw]}
-              components={components}
+              components={{
+                ...components,
+                p: ({ children, ...props }) => (
+                  <p
+                    className="mb-4 leading-relaxed"
+                    style={justifyText ? { textAlign: "justify", hyphens: "auto" } : undefined}
+                    {...props}
+                  >
+                    {children}
+                  </p>
+                ),
+              }}
             >
               {markdown}
             </ReactMarkdown>

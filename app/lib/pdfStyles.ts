@@ -619,6 +619,7 @@ export interface PDFOptions {
   lineHeight: LineHeight;
   customLineHeight?: number; // multiplier
   showPageNumbers: boolean;
+  justifyText?: boolean;
   headerText?: string;
   footerText?: string;
 }
@@ -742,6 +743,16 @@ export function generatePDFStylesWithOptions(options: PDFOptions): string {
     /(html\s*\{[^}]*line-height:)[^;]+;/g,
     `$1 ${lineHeight};`
   );
+
+  // Apply justified text alignment to paragraphs only (not table cells)
+  if (options.justifyText) {
+    styles += `
+p {
+  text-align: justify !important;
+  hyphens: auto;
+}
+`;
+  }
 
   // Append @page rule with the correct margins
   // This ensures CSS margins match Puppeteer margins and override any source HTML @page rules

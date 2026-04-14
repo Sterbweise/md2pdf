@@ -123,6 +123,10 @@ export default function ExportOptions({
     onChange({ ...options, showPageNumbers: e.target.checked });
   };
 
+  const handleJustifyTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange({ ...options, justifyText: e.target.checked });
+  };
+
   const handleHeaderTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setHeaderText(value);
@@ -474,6 +478,23 @@ export default function ExportOptions({
                   className="ml-3 text-sm font-medium text-neutral-700 dark:text-neutral-300"
                 >
                   Show page numbers
+                </label>
+              </div>
+
+              {/* Justify Text */}
+              <div className="flex items-center">
+                <input
+                  id="justifyText"
+                  type="checkbox"
+                  checked={options.justifyText ?? false}
+                  onChange={handleJustifyTextChange}
+                  className="w-4 h-4"
+                />
+                <label
+                  htmlFor="justifyText"
+                  className="ml-3 text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                >
+                  Justify paragraph text
                 </label>
               </div>
             </div>

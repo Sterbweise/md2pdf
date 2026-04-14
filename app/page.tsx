@@ -149,6 +149,7 @@ const defaultOptions: PDFOptions = {
   codeFontFamily: "jetbrains",
   lineHeight: "normal",
   showPageNumbers: false,
+  justifyText: false,
 };
 
 // Configuration - Update these with your actual URLs
@@ -672,6 +673,7 @@ export default function Home() {
               <PreviewPane
                 markdown={mode === "html" ? htmlPreview : currentContent}
                 mode={mode}
+                options={options}
               />
             </div>
           </div>
