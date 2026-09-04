@@ -5,6 +5,7 @@ import remarkRehype from "remark-rehype";
 import rehypeHighlight from "rehype-highlight";
 import rehypeStringify from "rehype-stringify";
 import rehypeRaw from "rehype-raw";
+import rehypeSlug from "rehype-slug";
 
 /**
  * Convert markdown string to HTML
@@ -15,6 +16,7 @@ export async function markdownToHtml(markdown: string): Promise<string> {
     .use(remarkGfm)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
+    .use(rehypeSlug)
     .use(rehypeHighlight, { detect: true, ignoreMissing: true })
     .use(rehypeStringify)
     .process(markdown);
