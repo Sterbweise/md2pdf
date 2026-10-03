@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any --
+ * Notion block payloads are large discriminated unions that this converter walks
+ * dynamically (block[block.type]...); typing every variant adds no safety here. */
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
 
@@ -105,7 +108,6 @@ export async function fetchNotionPage(
 
   // Aside: render as blockquote (compatible markdown)
   n2m.setCustomTransformer("aside", async (block) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const b = block as any;
     if (b.type !== "aside" || !b.aside) return false;
     const text = (b.aside.rich_text || []).map((t: { plain_text: string }) => t.plain_text).join("");
@@ -114,10 +116,8 @@ export async function fetchNotionPage(
 
   // Table: output HTML with colgroup for proper dimensions (table_width)
   n2m.setCustomTransformer("table", async (block) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const b = block as any;
     if (b.type !== "table") return false;
-    const tableWidth = Math.max(b.table?.table_width || 3, 1);
     const hasHeader = b.table?.has_column_header ?? true;
     const resp = await notion.blocks.children.list({ block_id: b.id, page_size: 100 });
     const rows = (resp as any).results || [];
@@ -141,9 +141,7 @@ export async function fetchNotionPage(
   });
 
   n2m.setCustomTransformer("toggle", async (block) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ((block as any).type !== "toggle") return false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const toggle = (block as any).toggle;
     const text = toggle.rich_text.map((t: { plain_text: string }) => t.plain_text).join("");
     return `<details>\n<summary>${text}</summary>\n\n</details>`;
@@ -153,7 +151,7 @@ export async function fetchNotionPage(
   const mdString = n2m.toMarkdownString(mdBlocks);
   
   // Clean up the markdown to fix indentation and formatting issues
-  let cleanedMd = mdString.parent
+  const cleanedMd = mdString.parent
     // Remove excessive indentation (notion-to-md sometimes adds 4+ spaces)
     .replace(/^([ ]{4,})/gm, "  ")
     // Fix code blocks that are accidentally created (lines starting with 4+ spaces)
@@ -480,7 +478,6 @@ async function blockToNotionHtml(block: any, indent: number = 0): Promise<string
           if (row.type === "table_row") {
             const cells = row.table_row.cells || [];
             const isFirstRow = i === 0 && hasHeader;
-            const tag = isFirstRow || hasRowHeader ? "th" : "td";
             const rowClass = isFirstRow ? ' class="simple-table-header"' : "";
             
             tableHtml += `<tr${rowClass}>`;

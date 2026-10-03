@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { applyTheme, getInitialTheme, setTheme, type Theme } from "../lib/theme";
+import { applyTheme, setTheme, type Theme } from "../lib/theme";
 
 interface ThemeContextValue {
   theme: Theme;
@@ -18,6 +18,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Sync with DOM (init script may have run) to avoid hydration mismatch
     const isDark = document.documentElement.classList.contains("dark");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the pre-hydration theme
     setThemeState(isDark ? "dark" : "light");
     setMounted(true);
   }, []);

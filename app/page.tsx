@@ -2,16 +2,21 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import MarkdownEditor from "./components/MarkdownEditor";
-import PreviewPane from "./components/PreviewPane";
+import PreviewPane, { type PreviewPaneHandle } from "./components/PreviewPane";
 import FileImportModal from "./components/FileImportModal";
 import ExportOptions from "./components/ExportOptions";
+import ExportMenu, { type ExportFormat } from "./components/ExportMenu";
 import NotionImporter from "./components/NotionImporter";
 import ThankYouModal from "./components/ThankYouModal";
 import SupportModal from "./components/SupportModal";
 import ThemeToggle from "./components/ThemeToggle";
-import type { PDFOptions } from "./lib/pdfStyles";
+import SplitView, { type ViewMode } from "./components/SplitView";
+import Toast, { type ToastMessage } from "./components/Toast";
+import { defaultPDFOptions, type PDFOptions } from "./lib/pdfStyles";
 import { embedImagesInHtml, embedImagesInMarkdown, type HtmlImageMap } from "./lib/htmlImageEmbedder";
 import { extractTitle } from "./lib/markdownParser";
+import { buildDocument } from "./lib/documentBuilder";
+import { useFullscreen, useMediaQuery, usePersistentState } from "./lib/hooks";
 
 const defaultMarkdown = `# Welcome to MD to PDF
 
@@ -141,17 +146,6 @@ const defaultHtml = `<!DOCTYPE html>
 </html>
 `;
 
-const defaultOptions: PDFOptions = {
-  pageSize: "A4",
-  margins: "normal",
-  fontSize: "medium",
-  fontFamily: "inter",
-  codeFontFamily: "jetbrains",
-  lineHeight: "normal",
-  showPageNumbers: false,
-  justifyText: false,
-};
-
 // Configuration - Update these with your actual URLs
 const CONFIG = {
   githubRepo: "https://github.com/Sterbweise/md2pdf",
@@ -161,6 +155,71 @@ const CONFIG = {
 };
 
 type EditorMode = "markdown" | "html";
+
+interface Draft {
+  mode: EditorMode;
+  markdown: string;
+  html: string;
+  documentName: string;
+}
+
+interface Layout {
+  viewMode: ViewMode;
+  ratio: number;
+}
+
+const initialDraft: Draft = {
+  mode: "markdown",
+  markdown: defaultMarkdown,
+  html: defaultHtml,
+  documentName: "document",
+};
+
+const initialLayout: Layout = { viewMode: "split", ratio: 50 };
+
+// Stored values come from older versions or other tabs: keep only valid fields
+function mergeDraft(stored: unknown, initial: Draft): Draft {
+  const s = (stored ?? {}) as Partial<Draft>;
+  return {
+    mode: s.mode === "html" ? "html" : "markdown",
+    markdown: typeof s.markdown === "string" ? s.markdown : initial.markdown,
+    html: typeof s.html === "string" ? s.html : initial.html,
+    documentName: typeof s.documentName === "string" ? s.documentName : initial.documentName,
+  };
+}
+
+function mergeOptions(stored: unknown, initial: PDFOptions): PDFOptions {
+  return { ...initial, ...((stored ?? {}) as Partial<PDFOptions>) };
+}
+
+function mergeLayout(stored: unknown, initial: Layout): Layout {
+  const s = (stored ?? {}) as Partial<Layout>;
+  return {
+    viewMode: s.viewMode === "editor" || s.viewMode === "preview" ? s.viewMode : initial.viewMode,
+    ratio: typeof s.ratio === "number" && s.ratio >= 20 && s.ratio <= 80 ? s.ratio : initial.ratio,
+  };
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoke later: some browsers cancel the download if revoked synchronously
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function OptionsIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
 
 const ROTATING_WORDS = ["Markdown", "Notion", "HTML"];
 
@@ -233,104 +292,128 @@ function RotatingWord() {
 }
 
 export default function Home() {
-  const [mode, setMode] = useState<EditorMode>("markdown");
-  const [markdown, setMarkdown] = useState(defaultMarkdown);
-  const [html, setHtml] = useState(defaultHtml);
-  const [options, setOptions] = useState<PDFOptions>(defaultOptions);
+  const [draft, setDraft] = usePersistentState<Draft>("md2pdf-draft", initialDraft, mergeDraft);
+  const [options, setOptions] = usePersistentState<PDFOptions>("md2pdf-options", defaultPDFOptions, mergeOptions);
+  const [layout, setLayout] = usePersistentState<Layout>("md2pdf-layout", initialLayout, mergeLayout);
   const [isExportOptionsOpen, setIsExportOptionsOpen] = useState(false);
   const [isNotionImporterOpen, setIsNotionImporterOpen] = useState(false);
   const [isFileImportOpen, setIsFileImportOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isThankYouOpen, setIsThankYouOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [documentName, setDocumentName] = useState("document");
   const [isEditingName, setIsEditingName] = useState(false);
   const [htmlImageMap, setHtmlImageMap] = useState<HtmlImageMap | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  const currentContent = mode === "markdown" ? markdown : html;
-  const setCurrentContent = mode === "markdown" ? setMarkdown : setHtml;
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<PreviewPaneHandle>(null);
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const { isFullscreen, isFallback, toggle: toggleFullscreen } = useFullscreen(workspaceRef);
 
-  const htmlPreview = useMemo(() => {
-    if (mode !== "html") {
-      return "";
-    }
-    return embedImagesInHtml(html, htmlImageMap);
-  }, [mode, html, htmlImageMap]);
+  const { mode, documentName } = draft;
+  const currentContent = mode === "markdown" ? draft.markdown : draft.html;
+  const exportName = documentName.trim() || "document";
+
+  const notify = useCallback((text: string, kind: ToastMessage["kind"] = "info") => {
+    setToast({ id: Date.now(), text, kind });
+  }, []);
+  const dismissToast = useCallback(() => setToast(null), []);
+  const clearPendingFile = useCallback(() => setPendingFile(null), []);
+
+  const setMode = useCallback((next: EditorMode) => setDraft((d) => ({ ...d, mode: next })), [setDraft]);
+  const setDocumentName = useCallback((name: string) => setDraft((d) => ({ ...d, documentName: name })), [setDraft]);
+  const setCurrentContent = useCallback(
+    (value: string) => setDraft((d) => (d.mode === "markdown" ? { ...d, markdown: value } : { ...d, html: value })),
+    [setDraft]
+  );
+  const setViewMode = useCallback((viewMode: ViewMode) => setLayout((l) => ({ ...l, viewMode })), [setLayout]);
+  const setRatio = useCallback((ratio: number) => setLayout((l) => ({ ...l, ratio })), [setLayout]);
+
+  // Content with imported (ZIP) images embedded, used for preview and export
+  const contentWithImages = useMemo(
+    () =>
+      mode === "html"
+        ? embedImagesInHtml(currentContent, htmlImageMap)
+        : embedImagesInMarkdown(currentContent, htmlImageMap),
+    [mode, currentContent, htmlImageMap]
+  );
+
+  const loadContent = useCallback(
+    (content: string, format: EditorMode, name: string, imageMap: HtmlImageMap | null = null) => {
+      setDraft((d) => ({
+        ...d,
+        mode: format,
+        [format]: content,
+        documentName: name || "document",
+      }));
+      setHtmlImageMap(imageMap);
+    },
+    [setDraft]
+  );
 
   const handleFileLoad = useCallback(
     (content: string, filename: string, imageMap?: HtmlImageMap) => {
-      const isHtml = filename.toLowerCase().match(/\.(html|htm)$/);
+      const isHtml = /\.(html|htm)$/i.test(filename);
       const baseName = filename.replace(/\.(html|htm|md|markdown|txt)$/i, "");
-
-      if (isHtml) {
-        setMode("html");
-        setHtml(content);
-        setHtmlImageMap(imageMap || null);
-      } else {
-        setMode("markdown");
-        setMarkdown(content);
-        setHtmlImageMap(null);
-      }
-      setDocumentName(baseName || "document");
+      loadContent(content, isHtml ? "html" : "markdown", baseName, imageMap || null);
+      notify(`Imported ${filename}`, "success");
     },
-    [],
+    [loadContent, notify]
   );
 
-  const handleNotionImport = useCallback((content: string, format: "markdown" | "html") => {
-    // Set document title from content: first # for MD, first <title> for HTML
-    const mdTitle = extractTitle(content);
-    let docTitle: string;
-    if (format === "markdown") {
-      docTitle = mdTitle === "Document" ? "document" : mdTitle;
-    } else {
-      const raw = content.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim();
-      if (!raw) {
-        docTitle = "document";
+  const handleFileDrop = useCallback(
+    async (file: File) => {
+      const name = file.name.toLowerCase();
+      if (name.endsWith(".zip")) {
+        // ZIP archives (e.g. Notion exports) go through the import modal
+        setPendingFile(file);
+        setIsFileImportOpen(true);
+      } else if (/\.(md|markdown|txt|html|htm)$/.test(name)) {
+        handleFileLoad(await file.text(), file.name);
       } else {
-        const div = document.createElement("div");
-        div.innerHTML = raw;
-        docTitle = div.textContent || raw;
+        notify("Unsupported file. Drop a .md, .markdown, .txt, .html, .htm or .zip file.", "error");
       }
-    }
-    setDocumentName(docTitle || "document");
+    },
+    [handleFileLoad, notify]
+  );
 
-    if (format === "html") {
-      setHtml(content);
-      setMode("html");
-      setHtmlImageMap(null);
-    } else {
-      setMarkdown(content);
-      setMode("markdown");
-      setHtmlImageMap(null);
-    }
-  }, []);
+  const handleNotionImport = useCallback(
+    (content: string, format: "markdown" | "html") => {
+      // Set document title from content: first # for MD, first <title> for HTML
+      let docTitle: string;
+      if (format === "markdown") {
+        const mdTitle = extractTitle(content);
+        docTitle = mdTitle === "Document" ? "document" : mdTitle;
+      } else {
+        const raw = content.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim();
+        if (!raw) {
+          docTitle = "document";
+        } else {
+          const div = document.createElement("div");
+          div.innerHTML = raw;
+          docTitle = div.textContent || raw;
+        }
+      }
+      loadContent(content, format, docTitle);
+      notify("Notion page imported", "success");
+    },
+    [loadContent, notify]
+  );
 
-  const handleExportPDF = useCallback(async () => {
-    if (!currentContent.trim()) {
-      alert(`Please enter some ${mode} content first`);
-      return;
-    }
-
+  const exportPDF = useCallback(async () => {
     setIsExporting(true);
-
     try {
-      const contentForExport =
-        mode === "html"
-          ? embedImagesInHtml(currentContent, htmlImageMap)
-          : embedImagesInMarkdown(currentContent, htmlImageMap);
-
       const response = await fetch("/api/convert-pdf", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          markdown: mode === "markdown" ? contentForExport : undefined,
-          html: mode === "html" ? contentForExport : undefined,
+          markdown: mode === "markdown" ? contentWithImages : undefined,
+          html: mode === "html" ? contentWithImages : undefined,
           mode,
           options,
-          filename: `${documentName}.pdf`,
-          documentTitle: documentName,
+          filename: `${exportName}.pdf`,
+          documentTitle: exportName,
         }),
       });
 
@@ -340,55 +423,133 @@ export default function Home() {
         throw new Error(error.error || `Failed to generate PDF (HTTP ${response.status})`);
       }
 
-      const blob = await response.blob();
-
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${documentName}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-
-      // Show thank you modal after successful download
+      downloadBlob(await response.blob(), `${exportName}.pdf`);
       setIsThankYouOpen(true);
     } catch (error) {
       console.error("Export error:", error);
-      alert(error instanceof Error ? error.message : "Failed to export PDF");
+      notify(error instanceof Error ? error.message : "Failed to export PDF", "error");
     } finally {
       setIsExporting(false);
     }
-  }, [currentContent, mode, options, documentName, htmlImageMap]);
+  }, [mode, contentWithImages, options, exportName, notify]);
+
+  const handleExport = useCallback(
+    async (format: ExportFormat) => {
+      if (!currentContent.trim()) {
+        notify(`Please enter some ${mode === "html" ? "HTML" : "Markdown"} content first`, "error");
+        return;
+      }
+      if (format === "pdf") {
+        await exportPDF();
+      } else if (format === "html") {
+        const doc = await buildDocument(contentWithImages, options, mode, exportName);
+        downloadBlob(new Blob([doc.html], { type: "text/html;charset=utf-8" }), `${exportName}.html`);
+        notify("HTML page downloaded", "success");
+      } else if (format === "source") {
+        const isMd = mode === "markdown";
+        downloadBlob(
+          new Blob([currentContent], { type: `${isMd ? "text/markdown" : "text/html"};charset=utf-8` }),
+          `${exportName}.${isMd ? "md" : "html"}`
+        );
+      } else if (format === "print") {
+        // The preview must be visible to print from it
+        if (layout.viewMode === "editor") {
+          setViewMode("split");
+          setTimeout(() => previewRef.current?.print(), 400);
+        } else {
+          previewRef.current?.print();
+        }
+      }
+    },
+    [currentContent, mode, contentWithImages, options, exportName, exportPDF, layout.viewMode, setViewMode, notify]
+  );
+
+  // Ctrl/Cmd+S exports the PDF instead of saving the web page
+  const exportRef = useRef(handleExport);
+  useEffect(() => {
+    exportRef.current = handleExport;
+  }, [handleExport]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        exportRef.current("pdf");
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   const handleClear = useCallback(() => {
     if (confirm("Clear the editor?")) {
-      if (mode === "markdown") {
-        setMarkdown("");
-      } else {
-        setHtml("");
-        setHtmlImageMap(null);
-      }
-      setDocumentName("document");
+      setDraft((d) => (d.mode === "markdown" ? { ...d, markdown: "", documentName: "document" } : { ...d, html: "", documentName: "document" }));
+      if (mode === "html") setHtmlImageMap(null);
     }
-  }, [mode]);
+  }, [mode, setDraft]);
 
   const handleNameSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     setIsEditingName(false);
   }, []);
 
+  const headerButton =
+    "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors";
+
+  const modeToggle = (size: "sm" | "md") => (
+    <div className="flex items-center border border-neutral-200 dark:border-neutral-700">
+      {(["markdown", "html"] as const).map((m) => (
+        <button
+          key={m}
+          onClick={() => setMode(m)}
+          aria-pressed={mode === m}
+          className={`${size === "md" ? "px-4" : "px-3"} py-1.5 text-xs font-medium transition-colors ${
+            mode === m
+              ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
+              : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          }`}
+        >
+          {m === "markdown" ? "Markdown" : "HTML"}
+        </button>
+      ))}
+    </div>
+  );
+
+  const viewModes: Array<{ value: ViewMode; label: string; icon: React.ReactNode }> = [
+    {
+      value: "editor",
+      label: "Editor",
+      icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />,
+    },
+    {
+      value: "split",
+      label: "Split",
+      icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={isDesktop ? "M4 5h16v14H4zM12 5v14" : "M4 5h16v14H4zM4 12h16"} />,
+    },
+    {
+      value: "preview",
+      label: "Preview",
+      icon: (
+        <>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </>
+      ),
+    },
+  ];
+
   return (
     <div className="min-h-screen flex flex-col bg-neutral-100 dark:bg-neutral-950">
+      {/* App shell: header + workspace fill exactly one screen */}
+      <div className="h-dvh min-h-[560px] flex flex-col">
       {/* Header */}
       <header className="flex-shrink-0 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
         <div className="max-w-screen-2xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             {/* Logo & Title */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 min-w-0">
               <button
                 onClick={() => window.location.reload()}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 flex-shrink-0"
                 aria-label="MD2PDF - Markdown to PDF Converter"
               >
                 <h1 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
@@ -397,18 +558,16 @@ export default function Home() {
               </button>
 
               {/* Document Name */}
-              <div className="hidden sm:flex items-center gap-2 text-sm text-neutral-500">
+              <div className="hidden sm:flex items-center gap-2 text-sm text-neutral-500 min-w-0">
                 <span>/</span>
                 {isEditingName ? (
-                  <form
-                    onSubmit={handleNameSubmit}
-                    className="flex items-center"
-                  >
+                  <form onSubmit={handleNameSubmit} className="flex items-center">
                     <input
                       type="text"
                       value={documentName}
                       onChange={(e) => setDocumentName(e.target.value)}
                       onBlur={() => setIsEditingName(false)}
+                      aria-label="Document name"
                       className="px-2 py-1 text-sm bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-neutral-400"
                       autoFocus
                     />
@@ -416,22 +575,13 @@ export default function Home() {
                 ) : (
                   <button
                     onClick={() => setIsEditingName(true)}
-                    className="group flex items-center gap-2 px-2 py-1 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                    className="group flex items-center gap-2 px-2 py-1 min-w-0 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                    title="Rename document"
                   >
-                    {documentName}
-                    <span className="flex items-center gap-1 text-xs text-neutral-400 dark:text-neutral-500">
-                      <svg
-                        className="w-3 h-3"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-                        />
+                    <span className="truncate max-w-[16rem]">{exportName}</span>
+                    <span className="flex items-center gap-1 text-xs text-neutral-400 dark:text-neutral-500 flex-shrink-0">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                       </svg>
                       rename me
                     </span>
@@ -442,181 +592,59 @@ export default function Home() {
 
             {/* Actions */}
             <div className="flex items-center gap-1">
-              {/* Theme Toggle */}
               <ThemeToggle />
 
-              {/* Mode Toggle */}
-              <div className="hidden md:flex items-center border border-neutral-200 dark:border-neutral-700 mr-2">
-                <button
-                  onClick={() => setMode("markdown")}
-                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                    mode === "markdown"
-                      ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
-                      : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                  }`}
-                >
-                  Markdown
-                </button>
-                <button
-                  onClick={() => setMode("html")}
-                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                    mode === "html"
-                      ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
-                      : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                  }`}
-                >
-                  HTML
-                </button>
-              </div>
+              <div className="hidden md:flex mr-2">{modeToggle("sm")}</div>
 
               {/* Import File */}
-              <button
-                onClick={() => setIsFileImportOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                  />
+              <button onClick={() => setIsFileImportOpen(true)} className={headerButton} title="Import a file">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                <span className="hidden sm:inline">Import</span>
+                <span className="hidden lg:inline">Import</span>
               </button>
 
               {/* Notion Import */}
-              <button
-                onClick={() => setIsNotionImporterOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-              >
-                <svg
-                  className="w-4 h-4"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
+              <button onClick={() => setIsNotionImporterOpen(true)} className={headerButton} title="Import from Notion">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 2.077c-.373-.28-.886-.467-1.446-.42L3.293 2.66c-.466.047-.56.28-.374.466l1.54 1.082zm.793 3.36v13.589c0 .746.373 1.026 1.213.98l14.29-.84c.84-.046.932-.559.932-1.165V6.77c0-.606-.233-.886-.746-.84l-14.897.84c-.56.047-.792.327-.792.839zm14.104.513c.093.42 0 .84-.42.886l-.7.14v10.033c-.606.327-1.166.514-1.633.514-.746 0-.932-.234-1.492-.933l-4.571-7.186v6.952l1.446.327s0 .84-1.166.84l-3.22.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.16 9.668c-.094-.42.14-1.026.793-1.073l3.453-.233 4.758 7.28V9.108l-1.213-.14c-.093-.513.28-.886.746-.933l3.26-.186zM3.526 1.374l13.44-.98c1.633-.14 2.052.093 2.752.606l3.826 2.754c.56.42.746.56.746 1.12v16.345c0 1.026-.373 1.633-1.679 1.726l-15.259.933c-.98.047-1.446-.093-1.959-.746L1.48 18.51c-.56-.746-.746-1.306-.746-1.959V2.82c0-.84.373-1.353 1.792-1.446z" />
                 </svg>
-                <span className="hidden sm:inline">Notion</span>
+                <span className="hidden lg:inline">Notion</span>
               </button>
 
               {/* Options */}
-              <button
-                onClick={() => setIsExportOptionsOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-                <span className="hidden sm:inline">Options</span>
+              <button onClick={() => setIsExportOptionsOpen(true)} className={headerButton} title="Export options">
+                <OptionsIcon />
+                <span className="hidden lg:inline">Options</span>
               </button>
 
               {/* Clear */}
-              <button
-                onClick={handleClear}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
+              <button onClick={handleClear} className={`${headerButton} hidden sm:flex`} title="Clear the editor">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
-                <span className="hidden sm:inline">Clear</span>
+                <span className="hidden lg:inline">Clear</span>
               </button>
 
               {/* Support Me */}
               <button
                 onClick={() => setIsSupportOpen(true)}
-                className="group relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all overflow-hidden"
+                className="group relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all overflow-hidden"
+                title="Support me"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-pink-500/0 via-pink-500/10 to-pink-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-                <svg
-                  className="w-4 h-4 group-hover:scale-110 transition-transform"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
+                <svg className="w-4 h-4 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
                 </svg>
-                <span className="relative hidden sm:inline">Support me</span>
+                <span className="relative hidden xl:inline">Support me</span>
               </button>
 
-              {/* Export PDF */}
-              <button
-                onClick={handleExportPDF}
-                disabled={isExporting || !currentContent.trim()}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-neutral-900 dark:bg-neutral-100 dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-1"
-              >
-                {isExporting ? (
-                  <>
-                    <svg
-                      className="w-4 h-4 animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    <span>Exporting...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                      />
-                    </svg>
-                    <span>Export PDF</span>
-                  </>
-                )}
-              </button>
+              <ExportMenu
+                onExport={handleExport}
+                isExporting={isExporting}
+                disabled={!currentContent.trim()}
+                sourceLabel={mode === "markdown" ? "Markdown file (.md)" : "HTML source (.html)"}
+              />
             </div>
           </div>
         </div>
@@ -624,62 +652,115 @@ export default function Home() {
 
       {/* Mobile Mode Toggle */}
       <div className="md:hidden flex items-center justify-center py-2 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
-        <div className="flex items-center border border-neutral-200 dark:border-neutral-700">
-          <button
-            onClick={() => setMode("markdown")}
-            className={`px-4 py-1.5 text-xs font-medium transition-colors ${
-              mode === "markdown"
-                ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
-                : "text-neutral-600 dark:text-neutral-400"
-            }`}
-          >
-            Markdown
-          </button>
-          <button
-            onClick={() => setMode("html")}
-            className={`px-4 py-1.5 text-xs font-medium transition-colors ${
-              mode === "html"
-                ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
-                : "text-neutral-600 dark:text-neutral-400"
-            }`}
-          >
-            HTML
-          </button>
-        </div>
+        {modeToggle("md")}
       </div>
 
       {/* Main Content */}
-      <main role="main">
-        <div className="max-w-screen-2xl mx-auto p-4">
-          <div
-            className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0"
-            style={{ height: "calc(100vh - 120px)" }}
-          >
-            {/* Left Column - Editor */}
-            <div className="min-h-0 min-w-0">
-              <MarkdownEditor
-                value={currentContent}
-                onChange={setCurrentContent}
-                mode={mode}
-                placeholder={
-                  mode === "markdown"
-                    ? "# Start typing your markdown here...\n\nSupports **bold**, *italic*, `code`, tables, and more!"
-                    : "<!DOCTYPE html>\n<html>\n<head>\n  <title>Document</title>\n</head>\n<body>\n  <h1>Your HTML content here</h1>\n</body>\n</html>"
-                }
-              />
+      <main role="main" className="flex-1 min-h-0">
+        <div
+          ref={workspaceRef}
+          className={`flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-950 ${
+            isFullscreen ? "h-full w-full p-3" : "h-full max-w-screen-2xl mx-auto p-4 pt-3"
+          } ${isFallback ? "fixed inset-0 z-50" : ""}`}
+        >
+          {/* Workspace toolbar */}
+          <div className="flex items-center justify-between gap-2 flex-shrink-0">
+            <div className="flex items-center border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900" role="radiogroup" aria-label="Layout">
+              {viewModes.map((v) => (
+                <button
+                  key={v.value}
+                  role="radio"
+                  aria-checked={layout.viewMode === v.value}
+                  onClick={() => setViewMode(v.value)}
+                  title={`${v.label} view`}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors ${
+                    layout.viewMode === v.value
+                      ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
+                      : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {v.icon}
+                  </svg>
+                  <span className="hidden sm:inline">{v.label}</span>
+                </button>
+              ))}
             </div>
 
-            {/* Right Column - Preview */}
-            <div className="min-h-0 min-w-0">
-              <PreviewPane
-                markdown={mode === "html" ? htmlPreview : currentContent}
-                mode={mode}
-                options={options}
-              />
+            <div className="flex items-center gap-1">
+              <span className="hidden lg:inline text-[11px] text-neutral-400 dark:text-neutral-500 mr-2">
+                <kbd className="font-sans">Ctrl</kbd>+<kbd className="font-sans">S</kbd> to export
+              </span>
+              {isFullscreen && (
+                <>
+                  <div className="hidden sm:flex mr-1">{modeToggle("sm")}</div>
+                  <button onClick={() => setIsExportOptionsOpen(true)} className={headerButton} title="Export options">
+                    <OptionsIcon />
+                  </button>
+                  <ExportMenu
+                    onExport={handleExport}
+                    isExporting={isExporting}
+                    disabled={!currentContent.trim()}
+                    sourceLabel={mode === "markdown" ? "Markdown file (.md)" : "HTML source (.html)"}
+                  />
+                </>
+              )}
+              <button
+                onClick={toggleFullscreen}
+                className="flex items-center gap-1.5 px-2.5 py-1 ml-1 text-xs font-medium border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                title={isFullscreen ? "Exit full screen (Esc)" : "Full screen"}
+                aria-pressed={isFullscreen}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d={
+                      isFullscreen
+                        ? "M9 4v5H4m11-5v5h5M9 20v-5H4m11 5v-5h5"
+                        : "M4 9V4h5m6 0h5v5M4 15v5h5m6 0h5v-5"
+                    }
+                  />
+                </svg>
+                <span className="hidden sm:inline">{isFullscreen ? "Exit" : "Full screen"}</span>
+              </button>
             </div>
+          </div>
+
+          <div className="flex-1 min-h-0">
+            <SplitView
+              direction={isDesktop ? "horizontal" : "vertical"}
+              viewMode={layout.viewMode}
+              ratio={layout.ratio}
+              onRatioChange={setRatio}
+              first={
+                <MarkdownEditor
+                  value={currentContent}
+                  onChange={setCurrentContent}
+                  mode={mode}
+                  onFileDrop={handleFileDrop}
+                  placeholder={
+                    mode === "markdown"
+                      ? "# Start typing your markdown here...\n\nSupports **bold**, *italic*, `code`, tables, and more!\n\nTip: drop a .md, .html or .zip file here."
+                      : "<!DOCTYPE html>\n<html>\n<head>\n  <title>Document</title>\n</head>\n<body>\n  <h1>Your HTML content here</h1>\n</body>\n</html>"
+                  }
+                />
+              }
+              second={
+                <PreviewPane
+                  ref={previewRef}
+                  content={contentWithImages}
+                  mode={mode}
+                  options={options}
+                  documentTitle={exportName}
+                />
+              }
+            />
           </div>
         </div>
       </main>
+      </div>
 
       {/* SEO Content Section – Keyword-rich content for search engines */}
       <section className="bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800">
@@ -748,9 +829,10 @@ export default function Home() {
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                 See your document rendered in real-time as you type. Customize
-                your PDF output with 11+ fonts, adjustable margins, multiple
-                page sizes (A4, Letter, Legal), line height control, page
-                numbers, and custom footer text.
+                your PDF output with 11+ fonts, adjustable margins, six page
+                sizes (A3, A4, A5, Letter, Legal, Tabloid) in portrait or
+                landscape, page numbers, headers, footers and an automatic
+                table of contents.
               </p>
             </article>
 
@@ -993,9 +1075,10 @@ export default function Home() {
                 </summary>
                 <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   Yes. MD2PDF offers extensive customization: 11+ fonts (Inter,
-                  Roboto, JetBrains Mono, etc.), adjustable margins, multiple
-                  page sizes (A4, Letter, Legal), custom line height, font size
-                  options, page numbers, and footer text.
+                  Roboto, JetBrains Mono, etc.), adjustable margins, six page
+                  sizes in portrait or landscape, content scaling, line height,
+                  font size, light or dark code blocks, page numbers, headers,
+                  footers, dates, a table of contents and PDF bookmarks.
                 </p>
               </details>
             </div>
@@ -1203,9 +1286,16 @@ export default function Home() {
 
       <FileImportModal
         isOpen={isFileImportOpen}
-        onClose={() => setIsFileImportOpen(false)}
+        onClose={() => {
+          setIsFileImportOpen(false);
+          setPendingFile(null);
+        }}
         onFileLoad={handleFileLoad}
+        pendingFile={pendingFile}
+        onPendingFileHandled={clearPendingFile}
       />
+
+      <Toast toast={toast} onDismiss={dismissToast} />
 
       <ThankYouModal
         isOpen={isThankYouOpen}

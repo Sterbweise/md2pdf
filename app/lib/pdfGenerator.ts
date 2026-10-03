@@ -1,99 +1,16 @@
 import puppeteer, {
   type Browser,
+  type Page,
   type PDFOptions as PuppeteerPDFOptions,
 } from "puppeteer";
 import fs from "fs";
-import hljs from "highlight.js";
+import { buildDocument } from "./documentBuilder";
 import {
-  markdownToHtml,
-  wrapHtmlDocument,
-  extractTitle,
-  sanitizeMarkdown,
-  detectLanguage,
-} from "./markdownParser";
-import {
-  generatePDFStylesWithOptions,
   getMargins,
   fontFamilyPresets,
-  withCjkFallback,
+  withFallbackFonts,
   type PDFOptions,
 } from "./pdfStyles";
-
-/**
- * Server-side syntax highlighting for HTML code blocks.
- * Finds <code class="language-*"> elements and applies highlight.js classes
- * so the PDF CSS can color them correctly.
- */
-function highlightHtmlCodeBlocks(html: string): string {
-  // First pass: highlight <code class="language-XXX"> blocks
-  let result = html.replace(
-    /<code\s+class="language-(\w+)"([^>]*)>([\s\S]*?)<\/code>/gi,
-    (match, lang: string, attrs: string, code: string) => {
-      try {
-        const decoded = decodeHtmlEntities(code);
-        const highlighted = hljs.getLanguage(lang)
-          ? hljs.highlight(decoded, { language: lang, ignoreIllegals: true })
-          : hljs.highlightAuto(decoded);
-        return `<code class="hljs language-${lang}"${attrs}>${highlighted.value}</code>`;
-      } catch {
-        return match;
-      }
-    }
-  );
-
-  // Second pass: auto-detect plain <pre><code> blocks without language class
-  result = result.replace(
-    /<pre([^>]*)><code(?![^>]*class="hljs)([^>]*)>([\s\S]*?)<\/code><\/pre>/gi,
-    (match, preAttrs: string, codeAttrs: string, code: string) => {
-      try {
-        const decoded = decodeHtmlEntities(code);
-        if (decoded.trim().length < 10) return match;
-        const highlighted = hljs.highlightAuto(decoded);
-        return `<pre${preAttrs}><code class="hljs"${codeAttrs}>${highlighted.value}</code></pre>`;
-      } catch {
-        return match;
-      }
-    }
-  );
-
-  return result;
-}
-
-/**
- * Strip inline style attributes from HTML that cause oversized PDF output.
- * Removes font-size, padding, margin, width, min-width, max-width from inline styles
- * so our PDF stylesheet takes control of sizing.
- * Also strips @page CSS rules from embedded <style> blocks to prevent margin conflicts.
- */
-function normalizeHtmlForPdf(html: string): string {
-  // First: strip @page rules from <style> blocks so they don't override our margins
-  let result = html.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (match, attrs: string, cssContent: string) => {
-    // Remove @page rules entirely
-    const cleaned = cssContent.replace(/@page\s*\{[^}]*\}/gi, "");
-    return `<style${attrs}>${cleaned}</style>`;
-  });
-
-  // Second: remove specific CSS properties from inline style attributes
-  result = result.replace(/\sstyle="([^"]*)"/gi, (match, styleContent: string) => {
-    // Remove size/spacing properties but keep others (like color, display, etc.)
-    const cleaned = styleContent
-      .replace(/font-size\s*:[^;]+;?/gi, "")
-      .replace(/padding(-top|-right|-bottom|-left)?\s*:[^;]+;?/gi, "")
-      .replace(/margin(-top|-right|-bottom|-left)?\s*:[^;]+;?/gi, "")
-      .replace(/width\s*:[^;]+;?/gi, "")
-      .replace(/min-width\s*:[^;]+;?/gi, "")
-      .replace(/max-width\s*:[^;]+;?/gi, "")
-      .replace(/min-height\s*:[^;]+;?/gi, "")
-      .replace(/line-height\s*:[^;]+;?/gi, "")
-      .trim();
-
-    // If nothing left, remove the style attribute entirely
-    if (!cleaned || cleaned === ";") return "";
-    return ` style="${cleaned}"`;
-  });
-
-  return result;
-}
 
 /**
  * Fetch a remote image URL and return as base64 data URI.
@@ -144,18 +61,6 @@ async function embedRemoteImagesInHtml(html: string): Promise<string> {
   }
   parts.push(html.slice(lastIndex));
   return parts.join("");
-}
-
-/** Decode common HTML entities for highlight.js processing */
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, "/");
 }
 
 // Singleton browser instance for better performance
@@ -304,6 +209,69 @@ export async function closeBrowser(): Promise<void> {
 }
 
 /**
+ * Build Puppeteer header/footer templates.
+ * Footer layout: custom text (left) · page number (center) · date (right).
+ */
+function buildHeaderFooter(
+  options: PDFOptions,
+  fontStack: string
+): { headerTemplate: string; footerTemplate: string } | null {
+  const hasFooter = options.showPageNumbers || options.footerText || options.showDate;
+  if (!hasFooter && !options.headerText) return null;
+
+  const base = `width: 100%; font-size: 9px; color: #666; padding: 0 0.5in; font-family: ${fontStack};`;
+
+  const headerTemplate = options.headerText
+    ? `<div style="${base} text-align: center;"><span>${escapeHtml(options.headerText)}</span></div>`
+    : "<span></span>";
+
+  let pageNumber = "";
+  if (options.showPageNumbers) {
+    const current = `<span class="pageNumber"></span>`;
+    const total = `<span class="totalPages"></span>`;
+    pageNumber =
+      options.pageNumberFormat === "number"
+        ? current
+        : options.pageNumberFormat === "full"
+          ? `Page ${current} of ${total}`
+          : `${current} / ${total}`;
+  }
+
+  const footerTemplate = hasFooter
+    ? `<div style="${base} display: flex; align-items: center;">
+        <span style="flex: 1; text-align: left;">${options.footerText ? escapeHtml(options.footerText) : ""}</span>
+        <span style="flex: 1; text-align: center;">${pageNumber}</span>
+        <span style="flex: 1; text-align: right;">${options.showDate ? `<span class="date"></span>` : ""}</span>
+      </div>`
+    : "<span></span>";
+
+  return { headerTemplate, footerTemplate };
+}
+
+/**
+ * Wait until images and web fonts are ready, without ever hanging the export.
+ */
+async function waitForAssets(page: Page, timeoutMs: number): Promise<void> {
+  const ready = page.evaluate(async () => {
+    const images = Array.from(document.images).filter((img) => !img.complete);
+    await Promise.all(
+      images.map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            img.addEventListener("load", () => resolve(), { once: true });
+            img.addEventListener("error", () => resolve(), { once: true });
+          })
+      )
+    );
+    await document.fonts.ready;
+  });
+  await Promise.race([
+    ready.catch(() => undefined),
+    new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
+}
+
+/**
  * Generate PDF from markdown or HTML content
  * @param documentTitle - Override for the HTML <title> tag (e.g. document filename)
  */
@@ -317,139 +285,46 @@ export async function generatePDF(
   const page = await browser.newPage();
 
   try {
-    // Language drives CJK font selection (Chinese, Japanese, Korean)
-    const lang = detectLanguage(content);
-    const headerFooterFont = withCjkFallback(fontFamilyPresets.system, lang).replace(/"/g, "'");
+    // Embed remote (e.g. Notion) images as base64 so they render in the PDF
+    const source = mode === "html" ? await embedRemoteImagesInHtml(content) : content;
+    const { html, lang } = await buildDocument(source, options, mode, documentTitle);
 
-    let fullHtml: string;
-    let title: string;
-
-    if (mode === "html") {
-      // For HTML mode, use content directly with styles
-      const styles = generatePDFStylesWithOptions(options, lang);
-
-      // Embed remote images (e.g. from Notion import) as base64 so they render in PDF
-      const contentWithImages = await embedRemoteImagesInHtml(content);
-
-      // Strip inline sizing styles so our PDF stylesheet controls the layout
-      const normalizedContent = normalizeHtmlForPdf(contentWithImages);
-
-      // Apply syntax highlighting to code blocks before rendering
-      const highlightedContent = highlightHtmlCodeBlocks(normalizedContent);
-
-      // Use documentTitle (filename) if provided, else extract from HTML
-      const titleMatch = highlightedContent.match(/<title[^>]*>(.*?)<\/title>/i);
-      title = documentTitle || (titleMatch ? titleMatch[1] : "Document");
-
-      // Check if content is a full HTML document
-      if (
-        highlightedContent.trim().toLowerCase().startsWith("<!doctype") ||
-        highlightedContent.trim().toLowerCase().startsWith("<html")
-      ) {
-        // Inject styles and optionally override <title>
-        let docHtml = highlightedContent.replace(
-          /<\/head>/i,
-          `<style>${styles}</style></head>`
-        );
-        if (documentTitle) {
-          docHtml = docHtml.replace(
-            /<title[^>]*>[\s\S]*?<\/title>/i,
-            `<title>${escapeHtml(documentTitle)}</title>`
-          );
-        }
-        fullHtml = docHtml;
-      } else {
-        // Wrap partial HTML in complete document
-        fullHtml = wrapHtmlDocument(highlightedContent, styles, title, lang);
-      }
-    } else {
-      // For Markdown mode, convert to HTML first
-      const sanitizedMarkdown = sanitizeMarkdown(content);
-      const htmlContent = await markdownToHtml(sanitizedMarkdown);
-      // Use documentTitle (filename) if provided, else first H1
-      title = documentTitle || extractTitle(content);
-
-      // Generate styles with font size adjustments
-      const styles = generatePDFStylesWithOptions(options, lang);
-
-      // Wrap in complete HTML document
-      fullHtml = wrapHtmlDocument(htmlContent, styles, title, lang);
-    }
-
-    // Set the page content with a more lenient wait strategy
-    await page.setContent(fullHtml, {
-      waitUntil: "domcontentloaded", // Changed from networkidle0 to avoid timeout
-      timeout: 60000, // Increased timeout to 60 seconds
-    });
-
-    // Wait for any fonts to load (with timeout protection)
+    // "load" waits for stylesheets (web fonts) and images; a slow remote
+    // resource must not fail the export, so a timeout just moves on.
     try {
-      await Promise.race([
-        page.evaluateHandle("document.fonts.ready"),
-        new Promise((resolve) => setTimeout(resolve, 5000)), // Max 5 seconds for fonts
-      ]);
-    } catch {
-      console.log("Font loading skipped or timed out");
+      await page.setContent(html, { waitUntil: "load", timeout: 20000 });
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "TimeoutError")) throw error;
+      console.warn("[PDF] Some resources did not load in time, continuing");
     }
-
-    // Give a small delay for any remaining resources
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await waitForAssets(page, 5000);
 
     // Get margin preset or custom margins
     const margins = getMargins(options);
-    console.log(`[PDF] Margins: ${options.margins} → top=${margins.top}, right=${margins.right}, bottom=${margins.bottom}, left=${margins.left}`);
 
     // Configure PDF options
     const pdfOptions: PuppeteerPDFOptions = {
       format: options.pageSize,
+      landscape: options.orientation === "landscape",
+      scale: options.scale ?? 1,
       margin: margins,
-      printBackground: true,
+      printBackground: options.printBackground ?? true,
       preferCSSPageSize: false,
+      // Tagged PDF improves accessibility and text extraction; the outline
+      // turns headings into PDF bookmarks (requires a tagged PDF)
+      tagged: true,
+      outline: options.bookmarks ?? true,
     };
 
-    // Add page numbers, header, and/or footer if requested
-    if (options.showPageNumbers || options.footerText || options.headerText) {
+    // Add page numbers, header, footer and/or date if requested
+    const headerFont = withFallbackFonts(fontFamilyPresets.system, lang).replace(/"/g, "'");
+    const templates = buildHeaderFooter(options, headerFont);
+    if (templates) {
       pdfOptions.displayHeaderFooter = true;
-
-      // Header template (custom header text only; page numbers stay in footer)
-      const headerContent = options.headerText
-        ? `
-          <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: ${headerFooterFont};">
-            <span>${escapeHtml(options.headerText)}</span>
-          </div>
-        `
-        : "<span></span>";
-      pdfOptions.headerTemplate = headerContent;
-
-      // Footer template
-      let footerContent = "";
-      if (options.footerText && options.showPageNumbers) {
-        footerContent = `
-          <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: ${headerFooterFont};">
-            <span style="flex: 1; text-align: left;">${escapeHtml(options.footerText)}</span>
-            <span style="flex: 1; text-align: center;"><span class="pageNumber"></span> / <span class="totalPages"></span></span>
-            <span style="flex: 1;"></span>
-          </div>
-        `;
-      } else if (options.footerText) {
-        footerContent = `
-          <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: ${headerFooterFont};">
-            <span>${escapeHtml(options.footerText)}</span>
-          </div>
-        `;
-      } else if (options.showPageNumbers) {
-        footerContent = `
-          <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 0;">
-            <span class="pageNumber"></span> / <span class="totalPages"></span>
-          </div>
-        `;
-      } else {
-        footerContent = "<span></span>";
-      }
-      pdfOptions.footerTemplate = footerContent;
+      pdfOptions.headerTemplate = templates.headerTemplate;
+      pdfOptions.footerTemplate = templates.footerTemplate;
     }
 
-    // Generate PDF
     const pdfBuffer = await page.pdf(pdfOptions);
 
     return Buffer.from(pdfBuffer);

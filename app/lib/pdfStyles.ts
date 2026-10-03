@@ -228,22 +228,28 @@ ul ul ul, ol ol ul, ul ol ul, ol ul ul {
   list-style-type: square;
 }
 
-/* Task Lists */
+/* Task Lists (GFM renders ul.contains-task-list > li.task-list-item) */
+ul.contains-task-list,
 ul.task-list {
   list-style-type: none;
-  padding-left: 0;
+  padding-left: 4pt;
 }
 
+li.task-list-item,
 ul.task-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 8pt;
+  list-style-type: none;
 }
 
+li.task-list-item input[type="checkbox"],
 ul.task-list input[type="checkbox"] {
-  margin-top: 3pt;
-  width: 12pt;
-  height: 12pt;
+  width: 10pt;
+  height: 10pt;
+  margin: 0 6pt 0 0;
+  vertical-align: -1pt;
+}
+
+li.task-list-item ul.contains-task-list {
+  padding-left: 16pt;
 }
 
 /* ===========================================
@@ -584,7 +590,8 @@ aside.callout-success {
 .compact aside { margin: 8pt 0; padding: 8pt 12pt; }
 `;
 
-export type PageSize = "A4" | "Letter" | "Legal";
+export type PageSize = "A4" | "Letter" | "Legal" | "A3" | "A5" | "Tabloid";
+export type Orientation = "portrait" | "landscape";
 export type MarginSize = "normal" | "narrow" | "wide" | "custom";
 export type FontSize = "small" | "medium" | "large" | "custom";
 export type FontFamily =
@@ -607,11 +614,15 @@ export type CodeFontFamily =
   | "monaco"
   | "menlo";
 export type LineHeight = "compact" | "normal" | "relaxed" | "custom";
+export type CodeTheme = "dark" | "light";
+export type PageNumberFormat = "number" | "fraction" | "full";
 
 export interface PDFOptions {
   pageSize: PageSize;
+  orientation?: Orientation;
   margins: MarginSize;
   customMargins?: { top: number; right: number; bottom: number; left: number }; // in inches
+  scale?: number; // content scale, 0.5 – 1.5
   fontSize: FontSize;
   customFontSize?: number; // base font size in pt
   fontFamily: FontFamily;
@@ -619,9 +630,65 @@ export interface PDFOptions {
   lineHeight: LineHeight;
   customLineHeight?: number; // multiplier
   showPageNumbers: boolean;
+  pageNumberFormat?: PageNumberFormat;
+  showDate?: boolean;
   justifyText?: boolean;
   headerText?: string;
   footerText?: string;
+  codeTheme?: CodeTheme;
+  tableOfContents?: boolean;
+  pageBreakBeforeH1?: boolean;
+  showLinkUrls?: boolean;
+  printBackground?: boolean;
+  bookmarks?: boolean;
+}
+
+export const defaultPDFOptions: PDFOptions = {
+  pageSize: "A4",
+  orientation: "portrait",
+  margins: "normal",
+  scale: 1,
+  fontSize: "medium",
+  fontFamily: "inter",
+  codeFontFamily: "jetbrains",
+  lineHeight: "normal",
+  showPageNumbers: false,
+  pageNumberFormat: "fraction",
+  showDate: false,
+  justifyText: false,
+  codeTheme: "dark",
+  tableOfContents: false,
+  pageBreakBeforeH1: false,
+  showLinkUrls: false,
+  printBackground: true,
+  bookmarks: true,
+};
+
+export const pageSizeLabels: Record<PageSize, string> = {
+  A4: "A4 (210 × 297 mm)",
+  Letter: "Letter (8.5 × 11 in)",
+  Legal: "Legal (8.5 × 14 in)",
+  A3: "A3 (297 × 420 mm)",
+  A5: "A5 (148 × 210 mm)",
+  Tabloid: "Tabloid (11 × 17 in)",
+};
+
+// Portrait page dimensions in millimetres
+const pageDimensionsMm: Record<PageSize, { width: number; height: number }> = {
+  A4: { width: 210, height: 297 },
+  Letter: { width: 215.9, height: 279.4 },
+  Legal: { width: 215.9, height: 355.6 },
+  A3: { width: 297, height: 420 },
+  A5: { width: 148, height: 210 },
+  Tabloid: { width: 279.4, height: 431.8 },
+};
+
+/** Page size in millimetres, taking orientation into account */
+export function getPageDimensionsMm(options: PDFOptions): { width: number; height: number } {
+  const size = pageDimensionsMm[options.pageSize] || pageDimensionsMm.A4;
+  return options.orientation === "landscape"
+    ? { width: size.height, height: size.width }
+    : size;
 }
 
 export const marginPresets: Record<
@@ -664,6 +731,29 @@ export const codeFontFamilyPresets: Record<CodeFontFamily, string> = {
   menlo: "Menlo, 'Liberation Mono', Consolas, monospace",
 };
 
+// Web fonts loaded from Google Fonts so the preview and the PDF use the same
+// typeface on every OS (Inter, Roboto... are rarely installed on servers).
+const webFontFamilies: Partial<Record<FontFamily | CodeFontFamily, string>> = {
+  inter: "Inter:ital,wght@0,400;0,500;0,600;0,700;1,400",
+  roboto: "Roboto:ital,wght@0,400;0,500;0,700;1,400",
+  garamond: "EB+Garamond:ital,wght@0,400;0,600;0,700;1,400",
+  jetbrains: "JetBrains+Mono:wght@400;600",
+  firacode: "Fira+Code:wght@400;600",
+  sourcecodepro: "Source+Code+Pro:wght@400;600",
+};
+
+/** <link> tags for the web fonts the chosen options need (empty if none) */
+export function getWebFontLinks(options: PDFOptions): string {
+  const families = new Set<string>();
+  const body = webFontFamilies[options.fontFamily];
+  const code = webFontFamilies[options.codeFontFamily];
+  if (body) families.add(body);
+  if (code) families.add(code);
+  if (families.size === 0) return "";
+  const query = [...families].map((f) => `family=${f}`).join("&");
+  return `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?${query}&display=swap">`;
+}
+
 // CJK fonts tried for glyphs the chosen Latin font lacks (Linux/Docker, macOS, Windows).
 // One list per language: Chinese, Japanese and Korean fonts draw shared characters differently.
 const cjkFallbacks: Record<"zh" | "ja" | "ko", { sans: string[]; serif: string[] }> = {
@@ -681,14 +771,16 @@ const cjkFallbacks: Record<"zh" | "ja" | "ko", { sans: string[]; serif: string[]
   },
 };
 
+const emojiFonts = ["Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"];
+
 /**
- * Insert CJK fallback fonts before the generic family of a font stack,
- * so Chinese/Japanese/Korean text renders instead of empty boxes.
+ * Insert CJK and emoji fallback fonts before the generic family of a font stack,
+ * so Chinese/Japanese/Korean text and emoji render instead of empty boxes.
  */
-export function withCjkFallback(stack: string, lang: string = "en"): string {
+export function withFallbackFonts(stack: string, lang: string = "en"): string {
   const key = lang.startsWith("ja") ? "ja" : lang.startsWith("ko") ? "ko" : "zh";
   const isSerif = /,\s*serif\s*$/.test(stack);
-  const fonts = cjkFallbacks[key][isSerif ? "serif" : "sans"]
+  const fonts = [...cjkFallbacks[key][isSerif ? "serif" : "sans"], ...emojiFonts]
     .map((font) => `'${font}'`)
     .join(", ");
   const match = stack.match(/^(.*),\s*(sans-serif|serif|monospace)\s*$/);
@@ -724,6 +816,50 @@ export const lineHeightMultipliers: Record<Exclude<LineHeight, "custom">, number
   relaxed: 1.8,
 };
 
+// GitHub-like light theme for code blocks
+const lightCodeThemeStyles = `
+pre {
+  background-color: #f6f8fa !important;
+  color: #1f2328 !important;
+  border: 1px solid #d0d7de;
+}
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in { color: #cf222e; }
+.hljs-string, .hljs-attr, .hljs-addition { color: #0a3069; }
+.hljs-number, .hljs-literal, .hljs-symbol { color: #0550ae; }
+.hljs-comment, .hljs-quote, .hljs-deletion { color: #6e7781; }
+.hljs-function, .hljs-title, .hljs-class { color: #8250df; }
+.hljs-variable, .hljs-template-variable, .hljs-params { color: #953800; }
+.hljs-type, .hljs-tag { color: #116329; }
+`;
+
+const tableOfContentsStyles = `
+nav.toc {
+  margin: 0 0 16pt 0;
+  padding: 10pt 14pt;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  break-inside: avoid;
+}
+nav.toc .toc-title {
+  font-weight: 700;
+  margin: 0 0 6pt 0;
+}
+nav.toc ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+nav.toc li {
+  margin: 0 0 2pt 0;
+}
+nav.toc li.toc-level-2 { padding-left: 14pt; }
+nav.toc li.toc-level-3 { padding-left: 28pt; }
+nav.toc a {
+  color: inherit;
+  text-decoration: none;
+}
+`;
+
 export function generatePDFStylesWithOptions(
   options: PDFOptions,
   lang: string = "en"
@@ -737,8 +873,8 @@ export function generatePDFStylesWithOptions(
     multiplier = fontSizeMultipliers[options.fontSize as keyof typeof fontSizeMultipliers] || 1;
   }
 
-  const fontFamily = withCjkFallback(fontFamilyPresets[options.fontFamily], lang);
-  const codeFontFamily = withCjkFallback(codeFontFamilyPresets[options.codeFontFamily], lang);
+  const fontFamily = withFallbackFonts(fontFamilyPresets[options.fontFamily] || fontFamilyPresets.inter, lang);
+  const codeFontFamily = withFallbackFonts(codeFontFamilyPresets[options.codeFontFamily] || codeFontFamilyPresets.jetbrains, lang);
 
   // Determine line height
   let lineHeight: number;
@@ -784,6 +920,37 @@ export function generatePDFStylesWithOptions(
 p {
   text-align: justify !important;
   hyphens: auto;
+}
+`;
+  }
+
+  if (options.codeTheme === "light") {
+    styles += lightCodeThemeStyles;
+  }
+
+  if (options.tableOfContents) {
+    styles += tableOfContentsStyles;
+  }
+
+  // Start every top-level section (each H1 after the first) on a new page
+  if (options.pageBreakBeforeH1) {
+    styles += `
+h1 ~ h1 {
+  break-before: page;
+  page-break-before: always;
+  margin-top: 0;
+}
+`;
+  }
+
+  // Print the target of external links, useful for paper copies
+  if (options.showLinkUrls) {
+    styles += `
+a[href^="http"]::after {
+  content: " (" attr(href) ")";
+  font-size: 0.85em;
+  color: #6b7280;
+  word-break: break-all;
 }
 `;
   }

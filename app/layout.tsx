@@ -269,7 +269,7 @@ function JsonLd() {
         name: "Can I customize the PDF output?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Yes. MD2PDF offers extensive customization: 11+ fonts, adjustable margins, multiple page sizes (A4, Letter, etc.), custom line height, font size options, page numbers, and footer text.",
+          text: "Yes. MD2PDF offers extensive customization: 11+ fonts (Inter, Roboto, JetBrains Mono, etc.), adjustable margins, six page sizes in portrait or landscape, content scaling, line height, font size, light or dark code blocks, page numbers, headers, footers, dates, a table of contents and PDF bookmarks.",
         },
       },
     ],

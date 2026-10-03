@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import JSZip from "jszip";
 import type { HtmlImageMap } from "@/app/lib/htmlImageEmbedder";
 
@@ -12,6 +12,9 @@ interface FileImportModalProps {
     filename: string,
     imageMap?: HtmlImageMap
   ) => void;
+  /** A file dropped elsewhere (e.g. on the editor) to process right away */
+  pendingFile?: File | null;
+  onPendingFileHandled?: () => void;
 }
 
 interface ExtractedContent {
@@ -78,6 +81,8 @@ export default function FileImportModal({
   isOpen,
   onClose,
   onFileLoad,
+  pendingFile,
+  onPendingFileHandled,
 }: FileImportModalProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -309,6 +314,12 @@ export default function FileImportModal({
     },
     [onFileLoad, processZipFile, onClose]
   );
+
+  useEffect(() => {
+    if (!isOpen || !pendingFile) return;
+    onPendingFileHandled?.();
+    processFile(pendingFile);
+  }, [isOpen, pendingFile, onPendingFileHandled, processFile]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePDFWithTimeout } from "@/app/lib/pdfGenerator";
 import { extractTitle } from "@/app/lib/markdownParser";
-import type {
-  PDFOptions,
-  PageSize,
-  MarginSize,
-  FontSize,
-  FontFamily,
-  CodeFontFamily,
-  LineHeight,
+import {
+  defaultPDFOptions,
+  fontFamilyPresets,
+  codeFontFamilyPresets,
+  marginPresets,
+  pageSizeLabels,
+  type PDFOptions,
 } from "@/app/lib/pdfStyles";
 
 export const runtime = "nodejs";
@@ -23,49 +22,62 @@ interface ConvertRequest {
   documentTitle?: string;
 }
 
-function validatePageSize(value: unknown): value is PageSize {
-  return value === "A4" || value === "Letter" || value === "Legal";
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : fallback;
 }
 
-function validateMarginSize(value: unknown): value is MarginSize {
-  return value === "narrow" || value === "normal" || value === "wide" || value === "custom";
+function clampNumber(value: unknown, min: number, max: number): number | undefined {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : undefined;
 }
 
-function validateFontSize(value: unknown): value is FontSize {
-  return value === "small" || value === "medium" || value === "large" || value === "custom";
+function optionalText(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.slice(0, 200) : undefined;
 }
 
-function validateFontFamily(value: unknown): value is FontFamily {
-  const validFonts = [
-    "inter",
-    "system",
-    "georgia",
-    "times",
-    "garamond",
-    "palatino",
-    "helvetica",
-    "arial",
-    "roboto",
-    "mono",
-    "jetbrains",
-  ];
-  return typeof value === "string" && validFonts.includes(value);
-}
+/** Validate client options: unknown values fall back to defaults, numbers are clamped */
+function parseOptions(raw: Partial<PDFOptions> = {}): PDFOptions {
+  const d = defaultPDFOptions;
+  const margins = oneOf(raw.margins, [...Object.keys(marginPresets), "custom"] as PDFOptions["margins"][], d.margins);
+  const fontSize = oneOf(raw.fontSize, ["small", "medium", "large", "custom"] as const, d.fontSize);
+  const lineHeight = oneOf(raw.lineHeight, ["compact", "normal", "relaxed", "custom"] as const, d.lineHeight);
+  const cm = raw.customMargins;
 
-function validateCodeFontFamily(value: unknown): value is CodeFontFamily {
-  const validCodeFonts = [
-    "jetbrains",
-    "firacode",
-    "sourcecodepro",
-    "consolas",
-    "monaco",
-    "menlo",
-  ];
-  return typeof value === "string" && validCodeFonts.includes(value);
-}
-
-function validateLineHeight(value: unknown): value is LineHeight {
-  return value === "compact" || value === "normal" || value === "relaxed" || value === "custom";
+  return {
+    pageSize: oneOf(raw.pageSize, Object.keys(pageSizeLabels) as PDFOptions["pageSize"][], d.pageSize),
+    orientation: oneOf(raw.orientation, ["portrait", "landscape"] as const, "portrait"),
+    margins,
+    customMargins:
+      margins === "custom" && cm
+        ? {
+            top: clampNumber(cm.top, 0, 3) ?? 0.75,
+            right: clampNumber(cm.right, 0, 3) ?? 0.75,
+            bottom: clampNumber(cm.bottom, 0, 3) ?? 0.75,
+            left: clampNumber(cm.left, 0, 3) ?? 0.75,
+          }
+        : undefined,
+    scale: clampNumber(raw.scale, 0.5, 1.5) ?? 1,
+    fontSize,
+    customFontSize: fontSize === "custom" ? clampNumber(raw.customFontSize, 6, 24) : undefined,
+    fontFamily: oneOf(raw.fontFamily, Object.keys(fontFamilyPresets) as PDFOptions["fontFamily"][], d.fontFamily),
+    codeFontFamily: oneOf(raw.codeFontFamily, Object.keys(codeFontFamilyPresets) as PDFOptions["codeFontFamily"][], d.codeFontFamily),
+    lineHeight,
+    customLineHeight: lineHeight === "custom" ? clampNumber(raw.customLineHeight, 1, 3) : undefined,
+    showPageNumbers: raw.showPageNumbers === true,
+    pageNumberFormat: oneOf(raw.pageNumberFormat, ["number", "fraction", "full"] as const, "fraction"),
+    showDate: raw.showDate === true,
+    justifyText: raw.justifyText === true,
+    headerText: optionalText(raw.headerText),
+    footerText: optionalText(raw.footerText),
+    codeTheme: oneOf(raw.codeTheme, ["dark", "light"] as const, "dark"),
+    tableOfContents: raw.tableOfContents === true,
+    pageBreakBeforeH1: raw.pageBreakBeforeH1 === true,
+    showLinkUrls: raw.showLinkUrls === true,
+    printBackground: raw.printBackground !== false,
+    bookmarks: raw.bookmarks !== false,
+  };
 }
 
 /** Strip path separators, quotes and control characters from a client-supplied filename */
@@ -96,7 +108,7 @@ export async function POST(request: NextRequest) {
     // Parse request body
     const body: ConvertRequest = await request.json();
 
-    const mode = body.mode || "markdown";
+    const mode = body.mode === "html" ? "html" : "markdown";
     const content = mode === "html" ? body.html : body.markdown;
 
     // Validate content
@@ -116,37 +128,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build PDF options with defaults
-    const options: PDFOptions = {
-      pageSize: validatePageSize(body.options?.pageSize)
-        ? body.options.pageSize
-        : "A4",
-      margins: validateMarginSize(body.options?.margins)
-        ? body.options.margins
-        : "normal",
-      customMargins: body.options?.customMargins,
-      fontSize: validateFontSize(body.options?.fontSize)
-        ? body.options.fontSize
-        : "medium",
-      customFontSize: body.options?.customFontSize,
-      fontFamily: validateFontFamily(body.options?.fontFamily)
-        ? body.options.fontFamily
-        : "inter",
-      codeFontFamily: validateCodeFontFamily(body.options?.codeFontFamily)
-        ? body.options.codeFontFamily
-        : "jetbrains",
-      lineHeight: validateLineHeight(body.options?.lineHeight)
-        ? body.options.lineHeight
-        : "normal",
-      customLineHeight: body.options?.customLineHeight,
-      showPageNumbers: body.options?.showPageNumbers ?? false,
-      justifyText: body.options?.justifyText ?? false,
-      headerText: body.options?.headerText,
-      footerText: body.options?.footerText,
-    };
+    const options = parseOptions(body.options);
 
     // Generate PDF (documentTitle overrides content-derived title for <title> tag)
-    const documentTitle = body.documentTitle?.trim();
+    const documentTitle =
+      typeof body.documentTitle === "string" ? body.documentTitle.trim().slice(0, 200) : undefined;
     const pdfBuffer = await generatePDFWithTimeout(
       content,
       options,

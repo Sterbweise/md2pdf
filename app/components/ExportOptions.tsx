@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import type {
-  PageSize,
-  MarginSize,
-  FontSize,
-  FontFamily,
-  CodeFontFamily,
-  LineHeight,
-  PDFOptions,
+import React, { useEffect } from "react";
+import {
+  defaultPDFOptions,
+  fontFamilyLabels,
+  codeFontFamilyLabels,
+  pageSizeLabels,
+  type PDFOptions,
+  type PageSize,
+  type FontFamily,
+  type CodeFontFamily,
 } from "../lib/pdfStyles";
-import { fontFamilyLabels, codeFontFamilyLabels } from "../lib/pdfStyles";
 
 interface ExportOptionsProps {
   options: PDFOptions;
@@ -19,501 +19,363 @@ interface ExportOptionsProps {
   onClose: () => void;
 }
 
-export default function ExportOptions({
-  options,
-  onChange,
-  isOpen,
-  onClose,
-}: ExportOptionsProps) {
-  // Local state for custom values
-  const [customMargins, setCustomMargins] = useState({
-    top: options.customMargins?.top || 0.75,
-    right: options.customMargins?.right || 0.75,
-    bottom: options.customMargins?.bottom || 0.75,
-    left: options.customMargins?.left || 0.75,
-  });
-  const [customFontSize, setCustomFontSize] = useState(options.customFontSize || 12);
-  const [customLineHeight, setCustomLineHeight] = useState(options.customLineHeight || 1.6);
-  const [headerText, setHeaderText] = useState(options.headerText || "");
-  const [footerText, setFooterText] = useState(options.footerText || "");
+const inputClass =
+  "w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm";
+const smallInputClass =
+  "w-full px-2 py-1 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent";
+const labelClass = "block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5";
 
-  // Update local state when options change
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-3">
+        {title}
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>
+    </section>
+  );
+}
+
+function Field({ id, label, hint, children, wide }: { id?: string; label: string; hint?: string; children: React.ReactNode; wide?: boolean }) {
+  return (
+    <div className={wide ? "sm:col-span-2" : undefined}>
+      <label htmlFor={id} className={labelClass}>
+        {label}
+      </label>
+      {children}
+      {hint && <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+function Toggle({ id, label, hint, checked, onChange }: { id: string; label: string; hint?: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <div className="flex items-start gap-3">
+      <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 flex-shrink-0" />
+      <label htmlFor={id} className="text-sm cursor-pointer">
+        <span className="font-medium text-neutral-700 dark:text-neutral-300">{label}</span>
+        {hint && <span className="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">{hint}</span>}
+      </label>
+    </div>
+  );
+}
+
+/** Two-or-more option button group, styled like the Markdown/HTML switch */
+function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: Array<{ value: T; label: string }>; onChange: (value: T) => void; label: string }) {
+  return (
+    <div className="flex border border-neutral-300 dark:border-neutral-700" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+            value === o.value
+              ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
+              : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const fontFamilies = Object.keys(fontFamilyLabels) as FontFamily[];
+const codeFontFamilies = Object.keys(codeFontFamilyLabels) as CodeFontFamily[];
+const pageSizes = Object.keys(pageSizeLabels) as PageSize[];
+
+export default function ExportOptions({ options, onChange, isOpen, onClose }: ExportOptionsProps) {
   useEffect(() => {
-    if (options.customMargins) {
-      setCustomMargins(options.customMargins);
-    }
-    if (options.customFontSize) {
-      setCustomFontSize(options.customFontSize);
-    }
-    if (options.customLineHeight) {
-      setCustomLineHeight(options.customLineHeight);
-    }
-    if (options.headerText !== undefined) {
-      setHeaderText(options.headerText);
-    }
-    if (options.footerText !== undefined) {
-      setFooterText(options.footerText);
-    }
-  }, [options]);
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
-  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ ...options, pageSize: e.target.value as PageSize });
-  };
+  const set = <K extends keyof PDFOptions>(key: K, value: PDFOptions[K]) => onChange({ ...options, [key]: value });
 
-  const handleMarginsChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value as MarginSize;
-    onChange({ 
-      ...options, 
-      margins: value,
-      customMargins: value === "custom" ? customMargins : undefined,
-    });
-  };
-
-  const handleCustomMarginsChange = (field: keyof typeof customMargins, value: number) => {
-    const newMargins = { ...customMargins, [field]: value };
-    setCustomMargins(newMargins);
-    if (options.margins === "custom") {
-      onChange({ ...options, customMargins: newMargins });
-    }
-  };
-
-  const handleFontSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value as FontSize;
-    onChange({ 
-      ...options, 
-      fontSize: value,
-      customFontSize: value === "custom" ? customFontSize : undefined,
-    });
-  };
-
-  const handleCustomFontSizeChange = (value: number) => {
-    setCustomFontSize(value);
-    if (options.fontSize === "custom") {
-      onChange({ ...options, customFontSize: value });
-    }
-  };
-
-  const handleFontFamilyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ ...options, fontFamily: e.target.value as FontFamily });
-  };
-
-  const handleCodeFontFamilyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ ...options, codeFontFamily: e.target.value as CodeFontFamily });
-  };
-
-  const handleLineHeightChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value as LineHeight;
-    onChange({ 
-      ...options, 
-      lineHeight: value,
-      customLineHeight: value === "custom" ? customLineHeight : undefined,
-    });
-  };
-
-  const handleCustomLineHeightChange = (value: number) => {
-    setCustomLineHeight(value);
-    if (options.lineHeight === "custom") {
-      onChange({ ...options, customLineHeight: value });
-    }
-  };
-
-  const handlePageNumbersChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ ...options, showPageNumbers: e.target.checked });
-  };
-
-  const handleJustifyTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange({ ...options, justifyText: e.target.checked });
-  };
-
-  const handleHeaderTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setHeaderText(value);
-    onChange({ ...options, headerText: value || undefined });
-  };
-
-  const handleFooterTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setFooterText(value);
-    onChange({ ...options, footerText: value || undefined });
-  };
-
-  const fontFamilies: FontFamily[] = [
-    "inter",
-    "system",
-    "georgia",
-    "times",
-    "garamond",
-    "palatino",
-    "helvetica",
-    "arial",
-    "roboto",
-    "mono",
-    "jetbrains",
-  ];
-
-  const codeFontFamilies: CodeFontFamily[] = [
-    "jetbrains",
-    "firacode",
-    "sourcecodepro",
-    "consolas",
-    "monaco",
-    "menlo",
-  ];
+  const customMargins = options.customMargins ?? { top: 0.75, right: 0.75, bottom: 0.75, left: 0.75 };
+  const setMargin = (side: keyof typeof customMargins, value: string) =>
+    set("customMargins", { ...customMargins, [side]: Math.min(3, Math.max(0, parseFloat(value) || 0)) });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-neutral-900 shadow-2xl w-full max-w-2xl mx-4 border border-neutral-200 dark:border-neutral-800">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-options-title"
+        className="relative bg-white dark:bg-neutral-900 shadow-2xl w-full max-w-2xl border border-neutral-200 dark:border-neutral-800 flex flex-col max-h-[90dvh] animate-modal-in"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 dark:border-neutral-800">
-          <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-            Export Options
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M6 18L18 6M6 6l12 12"
-              />
+          <div>
+            <h2 id="export-options-title" className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+              Export Options
+            </h2>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">Changes apply to the preview instantly.</p>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Left Column */}
-            <div className="space-y-4">
-              {/* Page Size */}
-              <div>
-                <label
-                  htmlFor="pageSize"
-                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
-                >
-                  Page Size
-                </label>
-                <select
-                  id="pageSize"
-                  value={options.pageSize}
-                  onChange={handlePageSizeChange}
-                  className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm"
-                >
-                  <option value="A4">A4 (210 × 297 mm)</option>
-                  <option value="Letter">Letter (8.5 × 11 in)</option>
-                  <option value="Legal">Legal (8.5 × 14 in)</option>
-                </select>
-              </div>
+        <div className="p-6 space-y-8 overflow-y-auto">
+          <Section title="Page">
+            <Field id="pageSize" label="Page Size">
+              <select id="pageSize" value={options.pageSize} onChange={(e) => set("pageSize", e.target.value as PageSize)} className={inputClass}>
+                {pageSizes.map((size) => (
+                  <option key={size} value={size}>
+                    {pageSizeLabels[size]}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-              {/* Margins */}
-              <div>
-                <label
-                  htmlFor="margins"
-                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
-                >
-                  Margins
-                </label>
-                <select
-                  id="margins"
-                  value={options.margins}
-                  onChange={handleMarginsChange}
-                  className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm"
-                >
-                  <option value="narrow">Narrow (0.5 in)</option>
-                  <option value="normal">Normal (0.75 in)</option>
-                  <option value="wide">Wide (1 in)</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
+            <Field label="Orientation">
+              <Segmented
+                label="Orientation"
+                value={options.orientation ?? "portrait"}
+                onChange={(v) => set("orientation", v)}
+                options={[
+                  { value: "portrait", label: "Portrait" },
+                  { value: "landscape", label: "Landscape" },
+                ]}
+              />
+            </Field>
 
-              {/* Custom Margins */}
-              {options.margins === "custom" && (
-                <div className="pl-4 border-l-2 border-neutral-200 dark:border-neutral-700 space-y-2">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">Margins (inches)</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">Top</label>
+            <Field id="margins" label="Margins">
+              <select
+                id="margins"
+                value={options.margins}
+                onChange={(e) => {
+                  const margins = e.target.value as PDFOptions["margins"];
+                  onChange({ ...options, margins, customMargins: margins === "custom" ? customMargins : undefined });
+                }}
+                className={inputClass}
+              >
+                <option value="narrow">Narrow (0.5 in)</option>
+                <option value="normal">Normal (0.75 in)</option>
+                <option value="wide">Wide (1 in)</option>
+                <option value="custom">Custom</option>
+              </select>
+            </Field>
+
+            <Field id="scale" label={`Content Scale · ${Math.round((options.scale ?? 1) * 100)}%`} hint="Shrink to fit more per page, or enlarge.">
+              <input
+                id="scale"
+                type="range"
+                min={0.5}
+                max={1.5}
+                step={0.05}
+                value={options.scale ?? 1}
+                onChange={(e) => set("scale", parseFloat(e.target.value))}
+                className="w-full accent-neutral-900 dark:accent-neutral-100 mt-2"
+              />
+            </Field>
+
+            {options.margins === "custom" && (
+              <div className="sm:col-span-2 pl-4 border-l-2 border-neutral-200 dark:border-neutral-700">
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">Margins (inches)</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {(["top", "right", "bottom", "left"] as const).map((side) => (
+                    <div key={side}>
+                      <label htmlFor={`margin-${side}`} className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1 capitalize">
+                        {side}
+                      </label>
                       <input
+                        id={`margin-${side}`}
                         type="number"
                         step="0.1"
                         min="0"
                         max="3"
-                        value={customMargins.top}
-                        onChange={(e) => handleCustomMarginsChange("top", parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 text-sm"
+                        value={customMargins[side]}
+                        onChange={(e) => setMargin(side, e.target.value)}
+                        className={smallInputClass}
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">Bottom</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="3"
-                        value={customMargins.bottom}
-                        onChange={(e) => handleCustomMarginsChange("bottom", parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">Left</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="3"
-                        value={customMargins.left}
-                        onChange={(e) => handleCustomMarginsChange("left", parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">Right</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="3"
-                        value={customMargins.right}
-                        onChange={(e) => handleCustomMarginsChange("right", parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 text-sm"
-                      />
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              )}
-
-              {/* Font Size */}
-              <div>
-                <label
-                  htmlFor="fontSize"
-                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
-                >
-                  Font Size
-                </label>
-                <select
-                  id="fontSize"
-                  value={options.fontSize}
-                  onChange={handleFontSizeChange}
-                  className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm"
-                >
-                  <option value="small">Small (10pt)</option>
-                  <option value="medium">Medium (12pt)</option>
-                  <option value="large">Large (14pt)</option>
-                  <option value="custom">Custom</option>
-                </select>
               </div>
+            )}
+          </Section>
 
-              {/* Custom Font Size */}
+          <Section title="Typography">
+            <Field id="fontFamily" label="Body Font">
+              <select id="fontFamily" value={options.fontFamily} onChange={(e) => set("fontFamily", e.target.value as FontFamily)} className={inputClass}>
+                {fontFamilies.map((font) => (
+                  <option key={font} value={font}>
+                    {fontFamilyLabels[font]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field id="codeFontFamily" label="Code Font">
+              <select id="codeFontFamily" value={options.codeFontFamily} onChange={(e) => set("codeFontFamily", e.target.value as CodeFontFamily)} className={inputClass}>
+                {codeFontFamilies.map((font) => (
+                  <option key={font} value={font}>
+                    {codeFontFamilyLabels[font]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field id="fontSize" label="Font Size">
+              <select
+                id="fontSize"
+                value={options.fontSize}
+                onChange={(e) => {
+                  const fontSize = e.target.value as PDFOptions["fontSize"];
+                  onChange({ ...options, fontSize, customFontSize: fontSize === "custom" ? options.customFontSize ?? 12 : undefined });
+                }}
+                className={inputClass}
+              >
+                <option value="small">Small (10pt)</option>
+                <option value="medium">Medium (11pt)</option>
+                <option value="large">Large (12.5pt)</option>
+                <option value="custom">Custom</option>
+              </select>
               {options.fontSize === "custom" && (
-                <div className="pl-4 border-l-2 border-neutral-200 dark:border-neutral-700">
-                  <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
-                    Base Font Size (pt)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="6"
-                    max="24"
-                    value={customFontSize}
-                    onChange={(e) => handleCustomFontSizeChange(parseFloat(e.target.value) || 12)}
-                    className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 text-sm"
-                  />
-                </div>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="6"
+                  max="24"
+                  aria-label="Base font size in points"
+                  value={options.customFontSize ?? 12}
+                  onChange={(e) => set("customFontSize", Math.min(24, Math.max(6, parseFloat(e.target.value) || 12)))}
+                  className={`${smallInputClass} mt-2`}
+                />
               )}
+            </Field>
 
-              {/* Line Height */}
-              <div>
-                <label
-                  htmlFor="lineHeight"
-                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
-                >
-                  Line Height
-                </label>
-                <select
-                  id="lineHeight"
-                  value={options.lineHeight}
-                  onChange={handleLineHeightChange}
-                  className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm"
-                >
-                  <option value="compact">Compact (1.4)</option>
-                  <option value="normal">Normal (1.6)</option>
-                  <option value="relaxed">Relaxed (1.8)</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
-
-              {/* Custom Line Height */}
+            <Field id="lineHeight" label="Line Height">
+              <select
+                id="lineHeight"
+                value={options.lineHeight}
+                onChange={(e) => {
+                  const lineHeight = e.target.value as PDFOptions["lineHeight"];
+                  onChange({ ...options, lineHeight, customLineHeight: lineHeight === "custom" ? options.customLineHeight ?? 1.6 : undefined });
+                }}
+                className={inputClass}
+              >
+                <option value="compact">Compact (1.4)</option>
+                <option value="normal">Normal (1.6)</option>
+                <option value="relaxed">Relaxed (1.8)</option>
+                <option value="custom">Custom</option>
+              </select>
               {options.lineHeight === "custom" && (
-                <div className="pl-4 border-l-2 border-neutral-200 dark:border-neutral-700">
-                  <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
-                    Line Height Multiplier
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="1"
-                    max="3"
-                    value={customLineHeight}
-                    onChange={(e) => handleCustomLineHeightChange(parseFloat(e.target.value) || 1.6)}
-                    className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 text-sm"
-                  />
-                </div>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="3"
+                  aria-label="Line height multiplier"
+                  value={options.customLineHeight ?? 1.6}
+                  onChange={(e) => set("customLineHeight", Math.min(3, Math.max(1, parseFloat(e.target.value) || 1.6)))}
+                  className={`${smallInputClass} mt-2`}
+                />
+              )}
+            </Field>
+
+            <Field label="Code Blocks">
+              <Segmented
+                label="Code block theme"
+                value={options.codeTheme ?? "dark"}
+                onChange={(v) => set("codeTheme", v)}
+                options={[
+                  { value: "dark", label: "Dark" },
+                  { value: "light", label: "Light" },
+                ]}
+              />
+            </Field>
+
+            <div className="flex items-end pb-2">
+              <Toggle id="justifyText" label="Justify paragraph text" checked={options.justifyText ?? false} onChange={(v) => set("justifyText", v)} />
+            </div>
+          </Section>
+
+          <Section title="Header & Footer">
+            <Field id="headerText" label="Header Text">
+              <input
+                id="headerText"
+                type="text"
+                maxLength={200}
+                value={options.headerText ?? ""}
+                onChange={(e) => set("headerText", e.target.value || undefined)}
+                placeholder="e.g., Company Name"
+                className={inputClass}
+              />
+            </Field>
+
+            <Field id="footerText" label="Footer Text">
+              <input
+                id="footerText"
+                type="text"
+                maxLength={200}
+                value={options.footerText ?? ""}
+                onChange={(e) => set("footerText", e.target.value || undefined)}
+                placeholder="e.g., © 2026 Your Company"
+                className={inputClass}
+              />
+            </Field>
+
+            <div className="space-y-3">
+              <Toggle id="pageNumbers" label="Page numbers" checked={options.showPageNumbers} onChange={(v) => set("showPageNumbers", v)} />
+              {options.showPageNumbers && (
+                <select
+                  aria-label="Page number format"
+                  value={options.pageNumberFormat ?? "fraction"}
+                  onChange={(e) => set("pageNumberFormat", e.target.value as PDFOptions["pageNumberFormat"])}
+                  className={inputClass}
+                >
+                  <option value="number">1</option>
+                  <option value="fraction">1 / 5</option>
+                  <option value="full">Page 1 of 5</option>
+                </select>
               )}
             </div>
 
-            {/* Right Column */}
-            <div className="space-y-4">
-              {/* Body Font */}
-              <div>
-                <label
-                  htmlFor="fontFamily"
-                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
-                >
-                  Body Font
-                </label>
-                <select
-                  id="fontFamily"
-                  value={options.fontFamily}
-                  onChange={handleFontFamilyChange}
-                  className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm"
-                >
-                  {fontFamilies.map((font) => (
-                    <option key={font} value={font}>
-                      {fontFamilyLabels[font]}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <Toggle id="showDate" label="Date in footer" hint="Printed at the bottom right of each page." checked={options.showDate ?? false} onChange={(v) => set("showDate", v)} />
+          </Section>
 
-              {/* Code Font */}
-              <div>
-                <label
-                  htmlFor="codeFontFamily"
-                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
-                >
-                  Code Font
-                </label>
-                <select
-                  id="codeFontFamily"
-                  value={options.codeFontFamily}
-                  onChange={handleCodeFontFamilyChange}
-                  className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm"
-                >
-                  {codeFontFamilies.map((font) => (
-                    <option key={font} value={font}>
-                      {codeFontFamilyLabels[font]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Header Text */}
-              <div>
-                <label
-                  htmlFor="headerText"
-                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
-                >
-                  Custom Header
-                </label>
-                <input
-                  id="headerText"
-                  type="text"
-                  value={headerText}
-                  onChange={handleHeaderTextChange}
-                  placeholder="e.g., Document Title or Company Name"
-                  className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm"
-                />
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                  Optional header text at top of each page
-                </p>
-              </div>
-
-              {/* Footer Text */}
-              <div>
-                <label
-                  htmlFor="footerText"
-                  className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5"
-                >
-                  Custom Footer
-                </label>
-                <input
-                  id="footerText"
-                  type="text"
-                  value={footerText}
-                  onChange={handleFooterTextChange}
-                  placeholder="e.g., © 2026 Your Company"
-                  className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100 focus:border-transparent transition-colors text-sm"
-                />
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                  Optional footer text at bottom of each page
-                </p>
-              </div>
-
-              {/* Page Numbers */}
-              <div className="flex items-center pt-2">
-                <input
-                  id="pageNumbers"
-                  type="checkbox"
-                  checked={options.showPageNumbers}
-                  onChange={handlePageNumbersChange}
-                  className="w-4 h-4"
-                />
-                <label
-                  htmlFor="pageNumbers"
-                  className="ml-3 text-sm font-medium text-neutral-700 dark:text-neutral-300"
-                >
-                  Show page numbers
-                </label>
-              </div>
-
-              {/* Justify Text */}
-              <div className="flex items-center">
-                <input
-                  id="justifyText"
-                  type="checkbox"
-                  checked={options.justifyText ?? false}
-                  onChange={handleJustifyTextChange}
-                  className="w-4 h-4"
-                />
-                <label
-                  htmlFor="justifyText"
-                  className="ml-3 text-sm font-medium text-neutral-700 dark:text-neutral-300"
-                >
-                  Justify paragraph text
-                </label>
-              </div>
-            </div>
-          </div>
+          <Section title="Document">
+            <Toggle id="toc" label="Table of contents" hint="Built from H1–H3 headings, with clickable links." checked={options.tableOfContents ?? false} onChange={(v) => set("tableOfContents", v)} />
+            <Toggle id="breakH1" label="New page for each H1" hint="Starts every top-level section on its own page." checked={options.pageBreakBeforeH1 ?? false} onChange={(v) => set("pageBreakBeforeH1", v)} />
+            <Toggle id="bookmarks" label="PDF bookmarks" hint="Headings appear in the PDF viewer's sidebar." checked={options.bookmarks ?? true} onChange={(v) => set("bookmarks", v)} />
+            <Toggle id="linkUrls" label="Show link URLs" hint="Prints the address after each external link." checked={options.showLinkUrls ?? false} onChange={(v) => set("showLinkUrls", v)} />
+            <Toggle id="printBackground" label="Print backgrounds" hint="Table stripes, code blocks and callout colors." checked={options.printBackground ?? true} onChange={(v) => set("printBackground", v)} />
+          </Section>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-200 dark:border-neutral-700">
+        <div className="flex items-center justify-between gap-3 px-6 py-4 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-200 dark:border-neutral-700">
           <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+            onClick={() => onChange(defaultPDFOptions)}
+            className="px-3 py-2 text-sm font-medium text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
           >
-            Cancel
+            Reset to defaults
           </button>
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-white bg-neutral-900 dark:bg-neutral-100 dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
           >
-            Apply
+            Done
           </button>
         </div>
       </div>

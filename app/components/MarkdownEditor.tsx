@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState, useEffect } from "react";
+import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 interface MarkdownEditorProps {
@@ -8,6 +8,8 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   mode?: "markdown" | "html";
+  /** Called when a file is dropped on the editor */
+  onFileDrop?: (file: File) => void;
 }
 
 interface FormatAction {
@@ -242,6 +244,7 @@ export default function MarkdownEditor({
   onChange,
   placeholder = "# Start typing your markdown here...\n\nSupports **bold**, *italic*, `code`, tables, and more!",
   mode = "markdown",
+  onFileDrop,
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -249,8 +252,19 @@ export default function MarkdownEditor({
   const [selEnd, setSelEnd] = useState(0);
   const [toolbarStyle, setToolbarStyle] = useState<React.CSSProperties | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- portal needs document.body after mount
   useEffect(() => setMounted(true), []);
+
+  const stats = useMemo(() => {
+    const text = mode === "html" ? value.replace(/<[^>]+>/g, " ") : value;
+    // CJK characters count as one word each; other scripts split on whitespace
+    const cjk = text.match(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/g)?.length ?? 0;
+    const words =
+      text.replace(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/g, " ").split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length + cjk;
+    return { words, minutes: Math.max(1, Math.round(words / 230)) };
+  }, [value, mode]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -531,15 +545,41 @@ export default function MarkdownEditor({
   return (
     <div className="h-full flex flex-col bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 overflow-hidden min-w-0">
       {/* Editor Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-neutral-50 dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
+      <div className="flex items-center justify-between gap-2 px-4 h-11 flex-shrink-0 bg-neutral-50 dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
         <span className="text-sm font-medium text-neutral-600 dark:text-neutral-300">
           {mode === "html" ? "HTML" : "Markdown"}
         </span>
-        <span className="text-xs text-neutral-400">{value.length} chars</span>
+        <span className="text-xs text-neutral-400 tabular-nums truncate" title={`${value.length.toLocaleString()} characters`}>
+          {stats.words.toLocaleString()} words
+          <span className="hidden sm:inline"> · {value.length.toLocaleString()} chars · {stats.minutes} min read</span>
+        </span>
       </div>
 
       {/* Editor Area */}
-      <div className="flex-1 relative">
+      <div
+        className="flex-1 min-h-0 relative"
+        onDragOver={(e) => {
+          if (!onFileDrop || !e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDragOver(false);
+        }}
+        onDrop={(e) => {
+          if (!onFileDrop) return;
+          const file = e.dataTransfer.files[0];
+          setIsDragOver(false);
+          if (!file) return;
+          e.preventDefault();
+          onFileDrop(file);
+        }}
+      >
+        {isDragOver && (
+          <div className="absolute inset-2 z-10 flex items-center justify-center border-2 border-dashed border-neutral-400 dark:border-neutral-500 bg-white/90 dark:bg-neutral-900/90 pointer-events-none">
+            <p className="text-sm font-medium text-neutral-600 dark:text-neutral-300">Drop a .md, .html, .txt or .zip file</p>
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           value={value}
