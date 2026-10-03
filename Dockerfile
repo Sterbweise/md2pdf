@@ -8,6 +8,9 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
+# Skip Puppeteer's Chrome download: the runner stage uses Alpine's Chromium
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 # Install dependencies
 RUN npm ci
 
@@ -29,7 +32,7 @@ RUN npm run build
 # Stage 3: Runner (production)
 FROM node:20-alpine AS runner
 
-# Install Chromium for Puppeteer
+# Install Chromium for Puppeteer, plus fonts for Latin, CJK (Chinese/Japanese/Korean) and emoji
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -37,10 +40,12 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
+    font-noto \
+    font-noto-cjk \
     font-noto-emoji
 
 # Tell Puppeteer to use installed Chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+ENV PUPPETEER_SKIP_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
@@ -49,10 +54,10 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-    # Copy necessary files
-    COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-    COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-    COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy necessary files
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app

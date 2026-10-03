@@ -25,15 +25,28 @@ export async function markdownToHtml(markdown: string): Promise<string> {
 }
 
 /**
+ * Guess the document language from its characters.
+ * CJK text needs a matching lang attribute so the browser picks the right
+ * glyph variants (Simplified Chinese, Japanese and Korean share code points).
+ */
+export function detectLanguage(text: string): string {
+  if (/[぀-ヿ]/.test(text)) return "ja"; // Hiragana / Katakana
+  if (/[ᄀ-ᇿ가-힯]/.test(text)) return "ko"; // Hangul
+  if (/[㐀-䶿一-鿿]/.test(text)) return "zh-CN"; // Han
+  return "en";
+}
+
+/**
  * Wrap HTML content in a complete HTML document with styles
  */
 export function wrapHtmlDocument(
   htmlContent: string,
   styles: string,
-  title: string = "Document"
+  title: string = "Document",
+  lang: string = "en"
 ): string {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${escapeHtml(lang)}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">

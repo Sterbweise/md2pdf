@@ -664,6 +664,37 @@ export const codeFontFamilyPresets: Record<CodeFontFamily, string> = {
   menlo: "Menlo, 'Liberation Mono', Consolas, monospace",
 };
 
+// CJK fonts tried for glyphs the chosen Latin font lacks (Linux/Docker, macOS, Windows).
+// One list per language: Chinese, Japanese and Korean fonts draw shared characters differently.
+const cjkFallbacks: Record<"zh" | "ja" | "ko", { sans: string[]; serif: string[] }> = {
+  zh: {
+    sans: ["Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei"],
+    serif: ["Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun"],
+  },
+  ja: {
+    sans: ["Noto Sans CJK JP", "Source Han Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo"],
+    serif: ["Noto Serif CJK JP", "Source Han Serif JP", "Hiragino Mincho ProN", "Yu Mincho"],
+  },
+  ko: {
+    sans: ["Noto Sans CJK KR", "Source Han Sans KR", "Apple SD Gothic Neo", "Malgun Gothic"],
+    serif: ["Noto Serif CJK KR", "Source Han Serif KR", "AppleMyungjo", "Batang"],
+  },
+};
+
+/**
+ * Insert CJK fallback fonts before the generic family of a font stack,
+ * so Chinese/Japanese/Korean text renders instead of empty boxes.
+ */
+export function withCjkFallback(stack: string, lang: string = "en"): string {
+  const key = lang.startsWith("ja") ? "ja" : lang.startsWith("ko") ? "ko" : "zh";
+  const isSerif = /,\s*serif\s*$/.test(stack);
+  const fonts = cjkFallbacks[key][isSerif ? "serif" : "sans"]
+    .map((font) => `'${font}'`)
+    .join(", ");
+  const match = stack.match(/^(.*),\s*(sans-serif|serif|monospace)\s*$/);
+  return match ? `${match[1]}, ${fonts}, ${match[2]}` : `${stack}, ${fonts}`;
+}
+
 export const fontFamilyLabels: Record<FontFamily, string> = {
   inter: "Inter (Default)",
   system: "System UI",
@@ -693,7 +724,10 @@ export const lineHeightMultipliers: Record<Exclude<LineHeight, "custom">, number
   relaxed: 1.8,
 };
 
-export function generatePDFStylesWithOptions(options: PDFOptions): string {
+export function generatePDFStylesWithOptions(
+  options: PDFOptions,
+  lang: string = "en"
+): string {
   // Determine font size multiplier
   let multiplier: number;
   if (options.fontSize === "custom" && options.customFontSize) {
@@ -703,8 +737,8 @@ export function generatePDFStylesWithOptions(options: PDFOptions): string {
     multiplier = fontSizeMultipliers[options.fontSize as keyof typeof fontSizeMultipliers] || 1;
   }
 
-  const fontFamily = fontFamilyPresets[options.fontFamily];
-  const codeFontFamily = codeFontFamilyPresets[options.codeFontFamily];
+  const fontFamily = withCjkFallback(fontFamilyPresets[options.fontFamily], lang);
+  const codeFontFamily = withCjkFallback(codeFontFamilyPresets[options.codeFontFamily], lang);
 
   // Determine line height
   let lineHeight: number;

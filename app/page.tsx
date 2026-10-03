@@ -335,8 +335,9 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to generate PDF");
+        // Error bodies may not be JSON (e.g. proxy or body-size errors)
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Failed to generate PDF (HTTP ${response.status})`);
       }
 
       const blob = await response.blob();

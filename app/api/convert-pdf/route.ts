@@ -68,6 +68,29 @@ function validateLineHeight(value: unknown): value is LineHeight {
   return value === "compact" || value === "normal" || value === "relaxed" || value === "custom";
 }
 
+/** Strip path separators, quotes and control characters from a client-supplied filename */
+function sanitizeFilename(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/[\u0000-\u001f\u007f"\\/<>:|?*]/g, "")
+    .trim()
+    .substring(0, 120);
+}
+
+/**
+ * Build a Content-Disposition header that survives non-ASCII names.
+ * HTTP headers only allow Latin-1, so a Chinese filename used directly
+ * throws; RFC 5987 `filename*` carries the UTF-8 name, `filename` an ASCII fallback.
+ */
+function contentDisposition(filename: string): string {
+  const asciiFallback = filename.replace(/[^\x20-\x7e]/g, "_");
+  const encoded = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Parse request body
@@ -139,11 +162,13 @@ export async function POST(request: NextRequest) {
         ? content.match(/<title[^>]*>(.*?)<\/title>/i)?.[1]
         : extractTitle(content)) ||
       "document";
+    // Keep letters/digits of any script (e.g. Chinese), drop everything else
     const safeTitle = title
-      .replace(/[^a-zA-Z0-9\s-]/g, "")
+      .replace(/[^\p{L}\p{N}\s-]/gu, "")
+      .trim()
       .replace(/\s+/g, "-")
       .substring(0, 50);
-    const filename = body.filename || `${safeTitle || "document"}.pdf`;
+    const filename = sanitizeFilename(body.filename) || `${safeTitle || "document"}.pdf`;
 
     // Return PDF as response
     const pdfBody = new Uint8Array(pdfBuffer);
@@ -151,7 +176,7 @@ export async function POST(request: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": contentDisposition(filename),
         "Content-Length": pdfBuffer.length.toString(),
         "Cache-Control": "no-cache, no-store, must-revalidate",
       },

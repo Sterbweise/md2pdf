@@ -9,10 +9,13 @@ import {
   wrapHtmlDocument,
   extractTitle,
   sanitizeMarkdown,
+  detectLanguage,
 } from "./markdownParser";
 import {
   generatePDFStylesWithOptions,
   getMargins,
+  fontFamilyPresets,
+  withCjkFallback,
   type PDFOptions,
 } from "./pdfStyles";
 
@@ -157,6 +160,8 @@ function decodeHtmlEntities(text: string): string {
 
 // Singleton browser instance for better performance
 let browserInstance: Browser | null = null;
+// Pending launch, shared so concurrent requests don't start several browsers
+let browserLaunch: Promise<Browser> | null = null;
 
 // Helper to escape HTML for safe injection
 function escapeHtml(text: string): string {
@@ -241,46 +246,54 @@ function findChromePath(): string | undefined {
 }
 
 async function getBrowser(): Promise<Browser> {
-  if (!browserInstance || !browserInstance.connected) {
-    const executablePath = findChromePath();
+  if (browserInstance?.connected) return browserInstance;
+  if (!browserLaunch) {
+    browserLaunch = launchBrowser().finally(() => {
+      browserLaunch = null;
+    });
+  }
+  browserInstance = await browserLaunch;
+  return browserInstance;
+}
 
-    const launchOptions = {
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
-        "--disable-gpu",
-        "--font-render-hinting=none",
-        "--disable-web-security",
-        "--disable-features=IsolateOrigins,site-per-process",
-      ],
-    };
+async function launchBrowser(): Promise<Browser> {
+  const executablePath = findChromePath();
 
-    try {
-      if (executablePath) {
-        console.log(`Attempting to launch Chrome from: ${executablePath}`);
-        browserInstance = await puppeteer.launch({
-          ...launchOptions,
-          executablePath,
-        });
-      } else {
-        console.log("No system Chrome found, using default Puppeteer browser");
-        browserInstance = await puppeteer.launch(launchOptions);
-      }
-    } catch (error) {
-      console.error("Failed to launch browser:", error);
+  const launchOptions = {
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--disable-gpu",
+      "--font-render-hinting=none",
+      "--disable-web-security",
+      "--disable-features=IsolateOrigins,site-per-process",
+    ],
+  };
 
-      // Final fallback: try with minimal args
-      console.log("Retrying with minimal configuration...");
-      browserInstance = await puppeteer.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  try {
+    if (executablePath) {
+      console.log(`Attempting to launch Chrome from: ${executablePath}`);
+      return await puppeteer.launch({
+        ...launchOptions,
+        executablePath,
       });
     }
+    console.log("No system Chrome found, using default Puppeteer browser");
+    return await puppeteer.launch(launchOptions);
+  } catch (error) {
+    console.error("Failed to launch browser:", error);
+
+    // Final fallback: try with minimal args
+    console.log("Retrying with minimal configuration...");
+    return puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      ...(executablePath ? { executablePath } : {}),
+    });
   }
-  return browserInstance;
 }
 
 export async function closeBrowser(): Promise<void> {
@@ -301,17 +314,19 @@ export async function generatePDF(
   documentTitle?: string
 ): Promise<Buffer> {
   const browser = await getBrowser();
+  const page = await browser.newPage();
 
   try {
-    // Create a new page
-    const page = await browser.newPage();
+    // Language drives CJK font selection (Chinese, Japanese, Korean)
+    const lang = detectLanguage(content);
+    const headerFooterFont = withCjkFallback(fontFamilyPresets.system, lang).replace(/"/g, "'");
 
     let fullHtml: string;
     let title: string;
 
     if (mode === "html") {
       // For HTML mode, use content directly with styles
-      const styles = generatePDFStylesWithOptions(options);
+      const styles = generatePDFStylesWithOptions(options, lang);
 
       // Embed remote images (e.g. from Notion import) as base64 so they render in PDF
       const contentWithImages = await embedRemoteImagesInHtml(content);
@@ -345,7 +360,7 @@ export async function generatePDF(
         fullHtml = docHtml;
       } else {
         // Wrap partial HTML in complete document
-        fullHtml = wrapHtmlDocument(highlightedContent, styles, title);
+        fullHtml = wrapHtmlDocument(highlightedContent, styles, title, lang);
       }
     } else {
       // For Markdown mode, convert to HTML first
@@ -355,10 +370,10 @@ export async function generatePDF(
       title = documentTitle || extractTitle(content);
 
       // Generate styles with font size adjustments
-      const styles = generatePDFStylesWithOptions(options);
+      const styles = generatePDFStylesWithOptions(options, lang);
 
       // Wrap in complete HTML document
-      fullHtml = wrapHtmlDocument(htmlContent, styles, title);
+      fullHtml = wrapHtmlDocument(htmlContent, styles, title, lang);
     }
 
     // Set the page content with a more lenient wait strategy
@@ -399,7 +414,7 @@ export async function generatePDF(
       // Header template (custom header text only; page numbers stay in footer)
       const headerContent = options.headerText
         ? `
-          <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: ${headerFooterFont};">
             <span>${escapeHtml(options.headerText)}</span>
           </div>
         `
@@ -410,7 +425,7 @@ export async function generatePDF(
       let footerContent = "";
       if (options.footerText && options.showPageNumbers) {
         footerContent = `
-          <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: ${headerFooterFont};">
             <span style="flex: 1; text-align: left;">${escapeHtml(options.footerText)}</span>
             <span style="flex: 1; text-align: center;"><span class="pageNumber"></span> / <span class="totalPages"></span></span>
             <span style="flex: 1;"></span>
@@ -418,7 +433,7 @@ export async function generatePDF(
         `;
       } else if (options.footerText) {
         footerContent = `
-          <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="width: 100%; text-align: center; font-size: 10px; color: #666; padding: 10px 30px; font-family: ${headerFooterFont};">
             <span>${escapeHtml(options.footerText)}</span>
           </div>
         `;
@@ -437,13 +452,13 @@ export async function generatePDF(
     // Generate PDF
     const pdfBuffer = await page.pdf(pdfOptions);
 
-    // Close the page
-    await page.close();
-
     return Buffer.from(pdfBuffer);
   } catch (error) {
     console.error("PDF generation error:", error);
     throw error;
+  } finally {
+    // Always close the tab, even on failure, so pages don't pile up
+    await page.close().catch(() => {});
   }
 }
 
@@ -457,12 +472,13 @@ export async function generatePDFWithTimeout(
   timeoutMs: number = 60000,
   documentTitle?: string
 ): Promise<Buffer> {
+  let timer: NodeJS.Timeout | undefined;
   return Promise.race([
     generatePDF(content, options, mode, documentTitle),
-    new Promise<Buffer>((_, reject) =>
-      setTimeout(() => reject(new Error("PDF generation timed out")), timeoutMs)
-    ),
-  ]);
+    new Promise<Buffer>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("PDF generation timed out")), timeoutMs);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 // Cleanup on process exit
