@@ -170,15 +170,27 @@ function escapeHtml(text: string): string {
 
 // Find Chrome executable path based on OS
 function findChromePath(): string | undefined {
-  const isWindows = process.platform === "win32";
+  const candidates: (string | undefined)[] = [];
 
+  // 1. Explicit override via the standard puppeteer environment variable
+  candidates.push(process.env["PUPPETEER_EXECUTABLE_PATH"]);
+
+  // 2. Puppeteer's own pinned browser in its cache directory.
+  //    If the cache is missing, or a previous download was interrupted
+  //    and left a folder without the actual binary, the path simply
+  //    won't exist and we fall through to system browsers instead of
+  //    failing the whole render with "Could not find Chrome".
+  try {
+    candidates.push(puppeteer.executablePath());
+  } catch {
+    // Puppeteer has no resolvable browser path - fall through
+  }
+
+  // 3. Well-known system locations per OS
+  const isWindows = process.platform === "win32";
+  const isMac = process.platform === "darwin";
   if (isWindows) {
-    const possiblePaths = [
-      // Puppeteer's downloaded Chrome (priority)
-      "C:\\Users\\Killian\\.cache\\puppeteer\\chrome\\win64-144.0.7559.96\\chrome-win64\\chrome.exe",
-      process.env["USERPROFILE"] +
-        "\\.cache\\puppeteer\\chrome\\win64-144.0.7559.96\\chrome-win64\\chrome.exe",
-      // System Chrome locations
+    candidates.push(
       "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
       "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
       process.env["LOCALAPPDATA"] + "\\Google\\Chrome\\Application\\chrome.exe",
@@ -187,29 +199,44 @@ function findChromePath(): string | undefined {
       // Edge as fallback (Chromium-based)
       "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
       "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-      process.env["PROGRAMFILES"] +
-        "\\Microsoft\\Edge\\Application\\msedge.exe",
+      process.env["PROGRAMFILES"] + "\\Microsoft\\Edge\\Application\\msedge.exe",
       process.env["PROGRAMFILES(X86)"] +
         "\\Microsoft\\Edge\\Application\\msedge.exe",
-    ];
-
-    console.log("Searching for Chrome/Edge in the following locations:");
-    for (const chromePath of possiblePaths) {
-      if (chromePath) {
-        console.log(`  - ${chromePath}`);
-        try {
-          if (fs.existsSync(chromePath)) {
-            console.log(`  ✓ Found browser at: ${chromePath}`);
-            return chromePath;
-          }
-        } catch {
-          // Ignore errors
-        }
-      }
-    }
-    console.log("  ✗ No system Chrome or Edge found");
+    );
+  } else if (isMac) {
+    candidates.push(
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium",
+      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    );
+  } else {
+    // Linux
+    candidates.push(
+      "/usr/bin/google-chrome",
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/microsoft-edge",
+      "/snap/bin/chromium",
+      "/opt/google/chrome/chrome",
+    );
   }
 
+  console.log("Searching for Chrome/Chromium/Edge in the following locations:");
+  for (const chromePath of candidates) {
+    if (chromePath) {
+      console.log(`  - ${chromePath}`);
+      try {
+        if (fs.existsSync(chromePath)) {
+          console.log(`  ✓ Found browser at: ${chromePath}`);
+          return chromePath;
+        }
+      } catch {
+        // Ignore errors
+      }
+    }
+  }
+  console.log("  ✗ No system Chrome/Chromium/Edge found");
   return undefined;
 }
 
