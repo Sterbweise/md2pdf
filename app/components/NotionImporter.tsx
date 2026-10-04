@@ -1,11 +1,19 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 
 interface NotionImporterProps {
   onImport: (content: string, format: "markdown" | "html") => void;
   isOpen: boolean;
   onClose: () => void;
+}
+
+function readSavedKey(): string {
+  try {
+    return typeof window === "undefined" ? "" : localStorage.getItem("notion_api_key") || "";
+  } catch {
+    return "";
+  }
 }
 
 export default function NotionImporter({
@@ -14,19 +22,12 @@ export default function NotionImporter({
   onClose,
 }: NotionImporterProps) {
   const [pageUrl, setPageUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
+  // The modal starts closed (renders nothing), so reading storage here can't cause a hydration mismatch
+  const [apiKey, setApiKey] = useState(readSavedKey);
   const [format, setFormat] = useState<"html" | "markdown">("html");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [rememberKey, setRememberKey] = useState(false);
-
-  useEffect(() => {
-    const savedKey = localStorage.getItem("notion_api_key");
-    if (savedKey) {
-      setApiKey(savedKey);
-      setRememberKey(true);
-    }
-  }, []);
+  const [rememberKey, setRememberKey] = useState(() => readSavedKey() !== "");
 
   const handleImport = useCallback(async () => {
     if (!pageUrl.trim()) {

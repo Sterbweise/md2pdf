@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import MarkdownEditor from "./components/MarkdownEditor";
 import PreviewPane, { type PreviewPaneHandle } from "./components/PreviewPane";
 import FileImportModal from "./components/FileImportModal";
@@ -16,6 +17,7 @@ import { defaultPDFOptions, type PDFOptions } from "./lib/pdfStyles";
 import { embedImagesInHtml, embedImagesInMarkdown, type HtmlImageMap } from "./lib/htmlImageEmbedder";
 import { extractTitle } from "./lib/markdownParser";
 import { buildDocument } from "./lib/documentBuilder";
+import { importFile } from "./lib/fileImport";
 import { useFullscreen, useMediaQuery, usePersistentState } from "./lib/hooks";
 
 const defaultMarkdown = `# Welcome to MD to PDF
@@ -212,6 +214,11 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Renders children inline, or into `target` (e.g. the fullscreen element) when given */
+function OverlayLayer({ target, children }: { target: HTMLElement | null; children: React.ReactNode }) {
+  return target ? createPortal(children, target) : <>{children}</>;
+}
+
 function OptionsIcon() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -298,7 +305,6 @@ export default function Home() {
   const [isExportOptionsOpen, setIsExportOptionsOpen] = useState(false);
   const [isNotionImporterOpen, setIsNotionImporterOpen] = useState(false);
   const [isFileImportOpen, setIsFileImportOpen] = useState(false);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isThankYouOpen, setIsThankYouOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -309,7 +315,7 @@ export default function Home() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<PreviewPaneHandle>(null);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
-  const { isFullscreen, isFallback, toggle: toggleFullscreen } = useFullscreen(workspaceRef);
+  const { isFullscreen, isFallback, fullscreenElement, toggle: toggleFullscreen } = useFullscreen(workspaceRef);
 
   const { mode, documentName } = draft;
   const currentContent = mode === "markdown" ? draft.markdown : draft.html;
@@ -319,7 +325,6 @@ export default function Home() {
     setToast({ id: Date.now(), text, kind });
   }, []);
   const dismissToast = useCallback(() => setToast(null), []);
-  const clearPendingFile = useCallback(() => setPendingFile(null), []);
 
   const setMode = useCallback((next: EditorMode) => setDraft((d) => ({ ...d, mode: next })), [setDraft]);
   const setDocumentName = useCallback((name: string) => setDraft((d) => ({ ...d, documentName: name })), [setDraft]);
@@ -364,15 +369,12 @@ export default function Home() {
 
   const handleFileDrop = useCallback(
     async (file: File) => {
-      const name = file.name.toLowerCase();
-      if (name.endsWith(".zip")) {
-        // ZIP archives (e.g. Notion exports) go through the import modal
-        setPendingFile(file);
-        setIsFileImportOpen(true);
-      } else if (/\.(md|markdown|txt|html|htm)$/.test(name)) {
-        handleFileLoad(await file.text(), file.name);
-      } else {
-        notify("Unsupported file. Drop a .md, .markdown, .txt, .html, .htm or .zip file.", "error");
+      if (file.name.toLowerCase().endsWith(".zip")) notify(`Importing ${file.name}...`);
+      try {
+        const imported = await importFile(file);
+        handleFileLoad(imported.content, imported.filename, imported.imageMap);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "Failed to import the file.", "error");
       }
     },
     [handleFileLoad, notify]
@@ -1270,7 +1272,8 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Modals */}
+      {/* Modals: in native fullscreen only the workspace is drawn, so they render inside it */}
+      <OverlayLayer target={fullscreenElement}>
       <ExportOptions
         options={options}
         onChange={setOptions}
@@ -1286,13 +1289,8 @@ export default function Home() {
 
       <FileImportModal
         isOpen={isFileImportOpen}
-        onClose={() => {
-          setIsFileImportOpen(false);
-          setPendingFile(null);
-        }}
+        onClose={() => setIsFileImportOpen(false)}
         onFileLoad={handleFileLoad}
-        pendingFile={pendingFile}
-        onPendingFileHandled={clearPendingFile}
       />
 
       <Toast toast={toast} onDismiss={dismissToast} />
@@ -1312,6 +1310,7 @@ export default function Home() {
         linkedIn={CONFIG.linkedIn}
         website={CONFIG.website}
       />
+      </OverlayLayer>
     </div>
   );
 }

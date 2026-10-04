@@ -13,9 +13,9 @@
     "@notionhq/client": "^5.9.0",
     "highlight.js": "^11.12.0",
     "jszip": "^3.10.1",
-    "next": "16.1.6",
+    "next": "16.3.8",
     "notion-to-md": "^3.1.9",
-    "puppeteer": "^24.37.3",
+    "puppeteer": "^25.12.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "rehype-highlight": "^7.0.2",
@@ -29,14 +29,21 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/node": "^25.2.3",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "autoprefixer": "^10.4.24",
-    "eslint": "^10.0.0",
-    "eslint-config-next": "16.1.6",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.3.8",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3"
+    "typescript": "~6.0.3"
+  },
+  "allowScripts": {
+    "puppeteer": true,
+    "sharp": true,
+    "unrs-resolver": true
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

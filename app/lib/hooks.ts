@@ -62,11 +62,13 @@ export function useMediaQuery(query: string): boolean {
  * falls back to a CSS "fill the viewport" mode (e.g. iPhone Safari).
  */
 export function useFullscreen(ref: RefObject<HTMLElement | null>) {
-  const [isNative, setIsNative] = useState(false);
+  // The element currently in native fullscreen (kept in state so it can be used during render)
+  const [nativeElement, setNativeElement] = useState<HTMLElement | null>(null);
   const [isFallback, setIsFallback] = useState(false);
 
   useEffect(() => {
-    const onChange = () => setIsNative(document.fullscreenElement === ref.current);
+    const onChange = () =>
+      setNativeElement(document.fullscreenElement === ref.current ? ref.current : null);
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, [ref]);
@@ -75,7 +77,8 @@ export function useFullscreen(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
     if (!isFallback) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsFallback(false);
+      // Escape closes an open dialog first, not the fullscreen mode
+      if (e.key === "Escape" && !document.querySelector('[aria-modal="true"]')) setIsFallback(false);
     };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -107,5 +110,5 @@ export function useFullscreen(ref: RefObject<HTMLElement | null>) {
     setIsFallback(true);
   }, [ref, isFallback]);
 
-  return { isFullscreen: isNative || isFallback, isFallback, toggle };
+  return { isFullscreen: nativeElement !== null || isFallback, isFallback, fullscreenElement: nativeElement, toggle };
 }

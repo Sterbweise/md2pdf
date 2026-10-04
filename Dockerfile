@@ -1,6 +1,6 @@
 # Multi-stage build for optimized Next.js production deployment
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 RUN apk add --no-cache libc6-compat
 
 WORKDIR /app
@@ -15,7 +15,7 @@ ENV PUPPETEER_SKIP_DOWNLOAD=true
 RUN npm ci
 
 # Stage 2: Builder
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -30,7 +30,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # Stage 3: Runner (production)
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 # Install Chromium for Puppeteer, plus fonts for Latin, CJK (Chinese/Japanese/Korean) and emoji
 RUN apk add --no-cache \

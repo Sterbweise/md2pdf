@@ -79,7 +79,7 @@ function escapeHtml(text: string): string {
 }
 
 // Find Chrome executable path based on OS
-function findChromePath(): string | undefined {
+async function findChromePath(): Promise<string | undefined> {
   const candidates: (string | undefined)[] = [];
 
   // 1. Explicit override via the standard puppeteer environment variable
@@ -91,7 +91,7 @@ function findChromePath(): string | undefined {
   //    won't exist and we fall through to system browsers instead of
   //    failing the whole render with "Could not find Chrome".
   try {
-    candidates.push(puppeteer.executablePath());
+    candidates.push(await puppeteer.executablePath());
   } catch {
     // Puppeteer has no resolvable browser path - fall through
   }
@@ -162,7 +162,7 @@ async function getBrowser(): Promise<Browser> {
 }
 
 async function launchBrowser(): Promise<Browser> {
-  const executablePath = findChromePath();
+  const executablePath = await findChromePath();
 
   const launchOptions = {
     headless: true,
